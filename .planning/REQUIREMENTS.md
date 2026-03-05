@@ -85,39 +85,39 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| XGBT-01 | — | Pending |
-| XGBT-02 | — | Pending |
-| XGBT-03 | — | Pending |
-| ENDP-01 | — | Pending |
-| ENDP-02 | — | Pending |
-| ENDP-03 | — | Pending |
-| ENDP-04 | — | Pending |
-| LAND-01 | — | Pending |
-| LAND-02 | — | Pending |
-| LAND-03 | — | Pending |
-| LAND-04 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| DASH-05 | — | Pending |
-| DASH-06 | — | Pending |
-| COMP-01 | — | Pending |
-| COMP-02 | — | Pending |
-| COMP-03 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| DATA-01 | — | Pending |
-| PLSH-01 | — | Pending |
-| PLSH-02 | — | Pending |
-| PLSH-03 | — | Pending |
+| XGBT-01 | Phase 1 | Pending |
+| XGBT-02 | Phase 1 | Pending |
+| XGBT-03 | Phase 1 | Pending |
+| ENDP-01 | Phase 1 | Pending |
+| ENDP-02 | Phase 1 | Pending |
+| ENDP-03 | Phase 1 | Pending |
+| ENDP-04 | Phase 1 | Pending |
+| LAND-01 | Phase 2 | Pending |
+| LAND-02 | Phase 2 | Pending |
+| LAND-03 | Phase 2 | Pending |
+| LAND-04 | Phase 2 | Pending |
+| COMP-01 | Phase 2 | Pending |
+| COMP-02 | Phase 2 | Pending |
+| COMP-03 | Phase 2 | Pending |
+| DATA-01 | Phase 2 | Pending |
+| DASH-01 | Phase 3 | Pending |
+| DASH-02 | Phase 3 | Pending |
+| DASH-03 | Phase 3 | Pending |
+| DASH-04 | Phase 3 | Pending |
+| DASH-05 | Phase 3 | Pending |
+| DASH-06 | Phase 3 | Pending |
+| INTG-01 | Phase 3 | Pending |
+| INTG-02 | Phase 3 | Pending |
+| INTG-03 | Phase 3 | Pending |
+| PLSH-01 | Phase 3 | Pending |
+| PLSH-02 | Phase 3 | Pending |
+| PLSH-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
-- Mapped to phases: 0
-- Unmapped: 27 (roadmap not yet created)
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after initial definition*
+*Last updated: 2026-03-05 after roadmap creation*
