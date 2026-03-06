@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-frontend-shell/01-03-PLAN.md
-last_updated: "2026-03-06T05:06:26.865Z"
+stopped_at: Completed 01-frontend-shell/01-04-PLAN.md
+last_updated: "2026-03-06T05:12:04.432Z"
 last_activity: 2026-03-05 — Roadmap created, phases derived from requirements
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 ---
 
@@ -53,6 +53,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 01-frontend-shell P01 | 7 | 2 tasks | 15 files |
 | Phase 01-frontend-shell P02 | 3 | 2 tasks | 6 files |
 | Phase 01-frontend-shell P03 | 8 | 2 tasks | 7 files |
+| Phase 01-frontend-shell P04 | 10 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Recent decisions affecting current work:
 - [Phase 01-frontend-shell]: BedroomCards omits 'use client' — no hooks/browser APIs, server-renderable
 - [Phase 01-frontend-shell]: SearchForm is client leaf, page.tsx stays Server Component — no 'use client' on page
 - [Phase 01-frontend-shell]: Validation uses inline error text only, no toasts — shake animation resets after 400ms
+- [Phase 01-frontend-shell]: Dashboard page stays Server Component — client boundary isolated to PriceChart; YoY computed from history array indices
+- [Phase 01-frontend-shell]: API route stubs include commented Phase 3 replacement code so wiring path is clear
 
 ### Pending Todos
 
@@ -80,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T05:06:26.862Z
-Stopped at: Completed 01-frontend-shell/01-03-PLAN.md
+Last session: 2026-03-06T05:12:04.430Z
+Stopped at: Completed 01-frontend-shell/01-04-PLAN.md
 Resume file: None
