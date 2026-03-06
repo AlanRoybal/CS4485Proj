@@ -48,7 +48,7 @@
 
 ### Static Data
 
-- [ ] **DATA-01**: `lib/dallas-zipcodes.json` contains the 113 curated core Dallas zipcodes as a static JSON array for frontend validation
+- [x] **DATA-01**: `lib/dallas-zipcodes.json` contains the 113 curated core Dallas zipcodes as a static JSON array for frontend validation
 
 ### Polish
 
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-01 | Phase 2 | Pending |
 | COMP-02 | Phase 2 | Pending |
 | COMP-03 | Phase 2 | Pending |
-| DATA-01 | Phase 2 | Pending |
+| DATA-01 | Phase 2 | Complete |
 | DASH-01 | Phase 3 | Pending |
 | DASH-02 | Phase 3 | Pending |
 | DASH-03 | Phase 3 | Pending |
