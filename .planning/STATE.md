@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** A user enters one Dallas zipcode and gets a clear, data-backed answer: what prices have done and where they're likely heading next month.
-**Current focus:** Phase 1 - ML Backend (and Phase 2 - Frontend Shell in parallel)
+**Current focus:** Phase 1 - Frontend Shell
 
 ## Current Position
 
@@ -57,5 +57,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Roadmap and STATE.md created. Next step: run /gsd:plan-phase 1 (ML Backend) or /gsd:plan-phase 2 (Frontend Shell)
+Stopped at: Phases reordered — Frontend Shell is now Phase 1, ML Backend is Phase 2, sequential. Discussing Phase 1 context.
 Resume file: None

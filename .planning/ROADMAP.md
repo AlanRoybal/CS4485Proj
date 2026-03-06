@@ -2,7 +2,7 @@
 
 ## Overview
 
-Three phases deliver the complete app. Phase 1 trains XGBoost and deploys both Modal endpoints. Phase 2 builds the Next.js frontend shell with mocked data — this can run in parallel with Phase 1. Phase 3 wires the two together: full dashboard connected to live Modal endpoints, error handling, loading states, and historical validation. The result is a deployed, working app where a homebuyer enters a Dallas zipcode and gets a price forecast backed by real ML.
+Three phases deliver the complete app sequentially. Phase 1 builds the Next.js frontend shell with mocked data. Phase 2 trains XGBoost and deploys both Modal endpoints. Phase 3 wires the two together: full dashboard connected to live Modal endpoints, error handling, loading states, and historical validation. The result is a deployed, working app where a homebuyer enters a Dallas zipcode and gets a price forecast backed by real ML.
 
 ## Phases
 
@@ -12,27 +12,15 @@ Three phases deliver the complete app. Phase 1 trains XGBoost and deploys both M
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: ML Backend** - Train XGBoost and deploy both Modal prediction and history endpoints
-- [ ] **Phase 2: Frontend Shell** - Build the Next.js landing page, UI components, and static zipcode data with mocked responses
+- [ ] **Phase 1: Frontend Shell** - Build the Next.js landing page, UI components, and static zipcode data with mocked responses
+- [ ] **Phase 2: ML Backend** - Train XGBoost and deploy both Modal prediction and history endpoints
 - [ ] **Phase 3: Integration and Polish** - Wire frontend to live Modal endpoints, complete dashboard, loading states, error handling, and historical validation
 
 ## Phase Details
 
-### Phase 1: ML Backend
-**Goal**: The prediction and history Modal endpoints are deployed and return correct data for any valid Dallas zipcode
-**Depends on**: Nothing (existing baseline model and train/test CSVs already on Volume)
-**Requirements**: XGBT-01, XGBT-02, XGBT-03, ENDP-01, ENDP-02, ENDP-03, ENDP-04
-**Success Criteria** (what must be TRUE):
-  1. A POST to the deployed predict endpoint with a valid Dallas zipcode and bedroom count returns a JSON response containing predicted_price, direction, confidence, current_price, predicted_change_dollars, and predicted_change_pct
-  2. A POST to the deployed history endpoint returns an array of date/zhvi objects covering the past 5 years for the requested zipcode and bedroom combo
-  3. The XGBoost model's test-set RMSE, MAE, and MAPE are printed and documented — and XGBoost direction accuracy either beats 75.82% or the decision to stay with Logistic Regression is recorded
-  4. The predict endpoint returns a clear error response when given a zipcode outside the allowed training set
-  5. Both endpoints load models once at startup, not on every request
-**Plans**: TBD
-
-### Phase 2: Frontend Shell
+### Phase 1: Frontend Shell
 **Goal**: Any teammate can clone the repo, run the Next.js app, and navigate from the landing page to a dashboard showing plausible mocked data — without needing Modal endpoints live
-**Depends on**: Nothing (builds in parallel with Phase 1)
+**Depends on**: Nothing
 **Requirements**: LAND-01, LAND-02, LAND-03, LAND-04, COMP-01, COMP-02, COMP-03, DATA-01
 **Success Criteria** (what must be TRUE):
   1. User can type a Dallas zipcode, pick a bedroom count, and submit — invalid zipcodes show an inline error before any network call
@@ -40,6 +28,18 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The PriceChart component renders a Recharts line chart with date on X-axis and $XXXk-formatted price on Y-axis when given sample data
   4. The ConfidenceGauge component shows green/red directional indicator with a confidence percentage
   5. The BedroomCards component renders four stat cards (2br, 3br, 4br, 5br+) with prices
+**Plans**: TBD
+
+### Phase 2: ML Backend
+**Goal**: The prediction and history Modal endpoints are deployed and return correct data for any valid Dallas zipcode
+**Depends on**: Phase 1
+**Requirements**: XGBT-01, XGBT-02, XGBT-03, ENDP-01, ENDP-02, ENDP-03, ENDP-04
+**Success Criteria** (what must be TRUE):
+  1. A POST to the deployed predict endpoint with a valid Dallas zipcode and bedroom count returns a JSON response containing predicted_price, direction, confidence, current_price, predicted_change_dollars, and predicted_change_pct
+  2. A POST to the deployed history endpoint returns an array of date/zhvi objects covering the past 5 years for the requested zipcode and bedroom combo
+  3. The XGBoost model's test-set RMSE, MAE, and MAPE are printed and documented — and XGBoost direction accuracy either beats 75.82% or the decision to stay with Logistic Regression is recorded
+  4. The predict endpoint returns a clear error response when given a zipcode outside the allowed training set
+  5. Both endpoints load models once at startup, not on every request
 **Plans**: TBD
 
 ### Phase 3: Integration and Polish
@@ -58,10 +58,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases 1 and 2 can run in parallel. Phase 3 requires both complete.
+Sequential. Phase 2 depends on Phase 1. Phase 3 requires both complete.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ML Backend | 0/? | Not started | - |
-| 2. Frontend Shell | 0/? | Not started | - |
+| 1. Frontend Shell | 0/? | Not started | - |
+| 2. ML Backend | 0/? | Not started | - |
 | 3. Integration and Polish | 0/? | Not started | - |
