@@ -36,9 +36,9 @@
 
 ### UI Components
 
-- [ ] **COMP-01**: `PriceChart.tsx` renders a Recharts LineChart accepting `data: { date: string, zhvi: number }[]`
-- [ ] **COMP-02**: `ConfidenceGauge.tsx` renders a directional confidence indicator accepting `direction: 'up' | 'down'` and `confidence: number`
-- [ ] **COMP-03**: `BedroomCards.tsx` renders a row of stat cards accepting prices for each bedroom tier
+- [x] **COMP-01**: `PriceChart.tsx` renders a Recharts LineChart accepting `data: { date: string, zhvi: number }[]`
+- [x] **COMP-02**: `ConfidenceGauge.tsx` renders a directional confidence indicator accepting `direction: 'up' | 'down'` and `confidence: number`
+- [x] **COMP-03**: `BedroomCards.tsx` renders a row of stat cards accepting prices for each bedroom tier
 
 ### Integration
 
@@ -96,9 +96,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LAND-02 | Phase 2 | Pending |
 | LAND-03 | Phase 2 | Pending |
 | LAND-04 | Phase 2 | Pending |
-| COMP-01 | Phase 2 | Pending |
-| COMP-02 | Phase 2 | Pending |
-| COMP-03 | Phase 2 | Pending |
+| COMP-01 | Phase 2 | Complete |
+| COMP-02 | Phase 2 | Complete |
+| COMP-03 | Phase 2 | Complete |
 | DATA-01 | Phase 2 | Complete |
 | DASH-01 | Phase 3 | Pending |
 | DASH-02 | Phase 3 | Pending |
