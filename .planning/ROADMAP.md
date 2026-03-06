@@ -28,7 +28,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The PriceChart component renders a Recharts line chart with date on X-axis and $XXXk-formatted price on Y-axis when given sample data
   4. The ConfidenceGauge component shows green/red directional indicator with a confidence percentage
   5. The BedroomCards component renders four stat cards (2br, 3br, 4br, 5br+) with prices
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Bootstrap Next.js 15 project, install dependencies, create static zipcode list, type contracts, mock fixture, and test scaffolds
+- [ ] 01-02-PLAN.md — Build PriceChart, ConfidenceGauge, and BedroomCards UI components with Recharts
+- [ ] 01-03-PLAN.md — Build SearchForm, NavBar, landing page, and About page
+- [ ] 01-04-PLAN.md — Assemble dashboard page wiring all 5 sections with mock data, add stub API proxy routes
 
 ### Phase 2: ML Backend
 **Goal**: The prediction and history Modal endpoints are deployed and return correct data for any valid Dallas zipcode
@@ -62,6 +68,6 @@ Sequential. Phase 2 depends on Phase 1. Phase 3 requires both complete.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Frontend Shell | 0/? | Not started | - |
+| 1. Frontend Shell | 0/4 | Not started | - |
 | 2. ML Backend | 0/? | Not started | - |
 | 3. Integration and Polish | 0/? | Not started | - |
