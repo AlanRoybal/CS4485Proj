@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-frontend-shell/01-02-PLAN.md
-last_updated: "2026-03-06T05:05:46.626Z"
+stopped_at: Completed 01-frontend-shell/01-03-PLAN.md
+last_updated: "2026-03-06T05:06:26.865Z"
 last_activity: 2026-03-05 — Roadmap created, phases derived from requirements
 progress:
   total_phases: 3
@@ -52,6 +52,7 @@ Progress: [███░░░░░░░] 25%
 *Updated after each plan completion*
 | Phase 01-frontend-shell P01 | 7 | 2 tasks | 15 files |
 | Phase 01-frontend-shell P02 | 3 | 2 tasks | 6 files |
+| Phase 01-frontend-shell P03 | 8 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - [Phase 01-frontend-shell]: 113 zipcodes derived from reference file regions (not plan's inline 106-entry list); tailwind.config.ts kept for docs only (v4 uses globals.css); bootstrap via temp dir workaround for uppercase folder name
 - [Phase 01-frontend-shell]: Recharts jsdom compatibility requires class MockResizeObserver + getBoundingClientRect spy; vi.fn() cannot be used as constructor in vitest 4.x
 - [Phase 01-frontend-shell]: BedroomCards omits 'use client' — no hooks/browser APIs, server-renderable
+- [Phase 01-frontend-shell]: SearchForm is client leaf, page.tsx stays Server Component — no 'use client' on page
+- [Phase 01-frontend-shell]: Validation uses inline error text only, no toasts — shake animation resets after 400ms
 
 ### Pending Todos
 
@@ -77,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T05:05:46.624Z
-Stopped at: Completed 01-frontend-shell/01-02-PLAN.md
+Last session: 2026-03-06T05:06:26.862Z
+Stopped at: Completed 01-frontend-shell/01-03-PLAN.md
 Resume file: None

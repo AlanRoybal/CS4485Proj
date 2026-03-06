@@ -20,10 +20,10 @@
 
 ### Landing Page
 
-- [ ] **LAND-01**: User can enter a 5-digit Dallas zipcode in a text input field
-- [ ] **LAND-02**: User can select bedroom count from 2, 3, 4, 5+ options
-- [ ] **LAND-03**: User sees a validation error if zipcode is not in the 113-zipcode Dallas list before any API call is made
-- [ ] **LAND-04**: Submitting valid input navigates to `/dashboard/[zipcode]?bedrooms=[n]`
+- [x] **LAND-01**: User can enter a 5-digit Dallas zipcode in a text input field
+- [x] **LAND-02**: User can select bedroom count from 2, 3, 4, 5+ options
+- [x] **LAND-03**: User sees a validation error if zipcode is not in the 113-zipcode Dallas list before any API call is made
+- [x] **LAND-04**: Submitting valid input navigates to `/dashboard/[zipcode]?bedrooms=[n]`
 
 ### Dashboard Page
 
@@ -92,10 +92,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENDP-02 | Phase 1 | Pending |
 | ENDP-03 | Phase 1 | Pending |
 | ENDP-04 | Phase 1 | Pending |
-| LAND-01 | Phase 2 | Pending |
-| LAND-02 | Phase 2 | Pending |
-| LAND-03 | Phase 2 | Pending |
-| LAND-04 | Phase 2 | Pending |
+| LAND-01 | Phase 2 | Complete |
+| LAND-02 | Phase 2 | Complete |
+| LAND-03 | Phase 2 | Complete |
+| LAND-04 | Phase 2 | Complete |
 | COMP-01 | Phase 2 | Complete |
 | COMP-02 | Phase 2 | Complete |
 | COMP-03 | Phase 2 | Complete |
