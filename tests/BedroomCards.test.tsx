@@ -15,7 +15,7 @@ describe('COMP-03: BedroomCards', () => {
     const { container } = render(
       <BedroomCards prices={MOCK_BEDROOM_PRICES} selectedBedrooms={3} />
     )
-    expect(container.innerHTML).toContain('border-teal-600')
+    expect(container.innerHTML).toContain('bg-teal-800')
   })
 
   it('renders 3 BR label', () => {

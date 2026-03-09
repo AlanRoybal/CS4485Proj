@@ -9,7 +9,7 @@ const BEDROOM_LABELS: Array<{ key: keyof BedroomPrices; label: string; value: nu
   { key: '2br', label: '2 BR', value: 2 },
   { key: '3br', label: '3 BR', value: 3 },
   { key: '4br', label: '4 BR', value: 4 },
-  { key: '5br', label: '5 BR+', value: 5 },
+  { key: '5br', label: '5+', value: 5 },
 ]
 
 function formatPrice(n: number): string {
@@ -22,21 +22,25 @@ function formatPrice(n: number): string {
 
 export default function BedroomCards({ prices, selectedBedrooms }: Props) {
   return (
-    <div className="grid grid-cols-4 gap-3" role="list" aria-label="Bedroom price breakdown">
+    <div className="space-y-2" role="list" aria-label="Bedroom price breakdown">
       {BEDROOM_LABELS.map(({ key, label, value }) => {
         const isSelected = value === selectedBedrooms
         return (
           <div
             key={key}
             role="listitem"
-            className={`rounded-lg p-4 bg-white border-2 text-center transition-colors ${
+            className={`flex items-center justify-between rounded px-4 py-3 transition-colors ${
               isSelected
-                ? 'border-teal-600 ring-2 ring-teal-200'
-                : 'border-gray-200'
+                ? 'bg-teal-800 text-white'
+                : 'bg-gray-50 text-gray-700'
             }`}
           >
-            <p className="text-sm font-medium text-gray-500">{label}</p>
-            <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(prices[key])}</p>
+            <span className={`text-sm font-medium ${isSelected ? 'text-teal-100' : 'text-gray-500'}`}>
+              {label}
+            </span>
+            <span className={`text-sm font-semibold tabular-nums ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+              {formatPrice(prices[key])}
+            </span>
           </div>
         )
       })}

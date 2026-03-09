@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, MapPin } from 'lucide-react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 
 interface Props {
   zipcode: string
@@ -18,25 +18,22 @@ export default function DashboardHeader({ zipcode, city, bedrooms, currentPrice,
   const bedroomLabel = bedrooms === 5 ? '5+ bedroom' : `${bedrooms}-bedroom`
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <MapPin size={18} className="text-teal-600" aria-hidden="true" />
-            <span className="text-sm font-medium text-gray-500">{city} · {zipcode}</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {bedroomLabel.charAt(0).toUpperCase() + bedroomLabel.slice(1)} homes
-          </h1>
-        </div>
-        <div className="text-right">
-          <p className="text-3xl font-bold text-teal-700">{formatPrice(currentPrice)}</p>
-          <div className={`flex items-center justify-end gap-1 mt-1 text-sm font-medium ${isUp ? 'text-green-600' : 'text-red-600'}`}>
-            {isUp
-              ? <TrendingUp size={16} aria-hidden="true" />
-              : <TrendingDown size={16} aria-hidden="true" />}
-            <span>{isUp ? '+' : '-'}{yoyAbs}% year over year</span>
-          </div>
+    <div className="flex items-end justify-between flex-wrap gap-4 pb-6 border-b border-gray-200/80">
+      <div>
+        <p className="text-[11px] font-semibold tracking-[0.15em] uppercase text-gray-400 mb-1">
+          {city} · {zipcode}
+        </p>
+        <h1 className="font-serif text-3xl text-gray-950">
+          {bedroomLabel.charAt(0).toUpperCase() + bedroomLabel.slice(1)} Homes
+        </h1>
+      </div>
+      <div className="text-right">
+        <p className="font-serif text-3xl text-teal-800">{formatPrice(currentPrice)}</p>
+        <div className={`flex items-center justify-end gap-1.5 mt-1 text-sm font-medium ${isUp ? 'text-emerald-700' : 'text-red-600'}`}>
+          {isUp
+            ? <TrendingUp size={14} aria-hidden="true" />
+            : <TrendingDown size={14} aria-hidden="true" />}
+          <span>{isUp ? '+' : '-'}{yoyAbs}% year over year</span>
         </div>
       </div>
     </div>
