@@ -4,6 +4,8 @@
 > This file is the single source of truth for everything that needs to be built.
 > Reference it when starting any new task or picking up work from another team member.
 
+**Recent change (PR #3 — backend merge):** Backend branch merged into main. Backend is now a single FastAPI app in `backend/main.py` with POST /predict (XGBoost 1m/3m/6m + LR direction), POST /history, and GET /zipcodes. Training scripts: `backend/train_xgboost.py`, `backend/train_logistic_regression.py`. Frontend API routes still use mock data until Phase III (wire to `MODAL_BACKEND_URL`).
+
 ---
 
 ## Project Summary
@@ -19,7 +21,7 @@ A web app where users enter a Dallas-area zipcode and bedroom count and receive:
 
 ---
 
-## Current Status (Week 5 of 9)
+## Current Status (Week 5+ of 9) — Updated after backend merge (PR #3)
 
 | Component | Status | Notes |
 |---|---|---|
@@ -27,11 +29,12 @@ A web app where users enter a Dallas-area zipcode and bedroom count and receive:
 | Feature engineering | ✅ Done | `prepare_training_data.py` |
 | Train/test CSVs on Volume | ✅ Done | `/mnt/real-estate-data/data/` |
 | Logistic Regression baseline | ✅ Done | 75.82% acc, 0.8231 AUC |
-| Baseline saved to Volume | ✅ Done | `/mnt/real-estate-data/models/baseline_logreg.pkl` |
-| XGBoost model | 🔲 Not started | Next priority |
-| Modal prediction endpoints | 🔲 Not started | After XGBoost |
-| Next.js frontend | 🔲 Not started | Can start in parallel |
-| Frontend ↔ Modal connection | 🔲 Not started | Phase III |
+| LR saved to Volume | ✅ Done | `/mnt/real-estate-data/models/logistic_regression.pkl` |
+| XGBoost models (1m, 3m, 6m) | ✅ Done | `backend/train_xgboost.py`, saved to Volume |
+| Backend prediction + history + zipcodes | ✅ Done | FastAPI `backend/main.py` (Modal-served) |
+| Latest data snapshot on Volume | ✅ Done | `/mnt/real-estate-data/models/latest_data.pkl` |
+| Next.js frontend | ✅ In progress | Landing, dashboard, components (Phase 1) |
+| Frontend ↔ Backend connection | 🔲 Not started | Replace mock with MODAL_*_URL (Phase III) |
 | End-to-end testing | 🔲 Not started | Phase III |
 
 ---
@@ -46,7 +49,11 @@ A web app where users enter a Dallas-area zipcode and bedroom count and receive:
   dallas_clean.csv   — full combined dataset, 72,912 rows
 
 /models/
-  baseline_logreg.pkl  — model + scaler + feature list bundled together
+  logistic_regression.pkl  — LR direction classifier + scaler + feature list
+  xgboost_1m.pkl           — 1-month-ahead ZHVI regressor
+  xgboost_3m.pkl           — 3-month-ahead ZHVI regressor
+  xgboost_6m.pkl           — 6-month-ahead ZHVI regressor
+  latest_data.pkl          — one row per zipcode (latest date) for /predict
 ```
 
 ### Dataset shape
@@ -83,126 +90,57 @@ FEATURES = [
 
 ---
 
-## Backend (Modal)
+## Backend (Modal-served FastAPI)
 
-### What needs to be built
+**Location:** `backend/main.py` — single FastAPI app with Modal Volume mount.  
+**Deploy:** `modal deploy backend/main.py` → one base URL; all endpoints live under it.
 
-#### 1. XGBoost Regressor — `train_xgboost.py`
-- **Target:** `target_zhvi_1m` (actual dollar price next month)
-- **Task:** Regression, not classification
-- **Features:** Same 14 features as Logistic Regression baseline
-- **Must beat:** Baseline accuracy of 75.82% and AUC of 0.8231 to justify use
-- **Evaluate with:** RMSE, MAE, MAPE on test set
-- **Address:** Known weakness of baseline — poor recall on "Up" class (61%). Use `scale_pos_weight` or SMOTE
-- **Save to Volume:** `/mnt/real-estate-data/models/xgboost_1m.pkl`
+### Implemented (from backend merge — PR #3)
 
-```python
-# Starter structure
-import xgboost as xgb
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-import pandas as pd, numpy as np, joblib, os
+#### 1. XGBoost Regressors — `backend/train_xgboost.py` ✅
+- **Targets:** `target_zhvi_1m`, `target_zhvi_3m`, `target_zhvi_6m` (regression)
+- **Features:** Same 14 leakage-free features
+- **Output:** Three `.pkl` files on Volume: `xgboost_1m.pkl`, `xgboost_3m.pkl`, `xgboost_6m.pkl`
+- **Also saves:** `latest_data.pkl` — one row per zipcode (latest date) for the predict endpoint
+- **Run:** `python3 train_xgboost.py` locally or `modal run train_xgboost.py` with Volume
 
-train_df = pd.read_csv('/mnt/real-estate-data/data/train.csv')
-test_df  = pd.read_csv('/mnt/real-estate-data/data/test.csv')
+#### 2. Logistic Regression direction classifier — `backend/train_logistic_regression.py` ✅
+- **Target:** `target_direction_1m` (1 = up, 0 = down)
+- **Data:** Pre-split `train.csv` / `test.csv` from Volume
+- **Save to Volume:** `/mnt/real-estate-data/models/logistic_regression.pkl` (model + scaler + features)
 
-FEATURES = [ ... ]  # same 14 as baseline
-TARGET = 'target_zhvi_1m'
-
-X_train, y_train = train_df[FEATURES].dropna(), train_df[TARGET]
-X_test,  y_test  = test_df[FEATURES].dropna(),  test_df[TARGET]
-
-model = xgb.XGBRegressor(n_estimators=500, learning_rate=0.05, random_state=42)
-model.fit(X_train, y_train)
-
-preds = model.predict(X_test)
-rmse = np.sqrt(mean_squared_error(y_test, preds))
-mae  = mean_absolute_error(y_test, preds)
-mape = np.mean(np.abs((y_test - preds) / y_test)) * 100
-print(f"RMSE: {rmse:.2f} | MAE: {mae:.2f} | MAPE: {mape:.2f}%")
-
-os.makedirs('/mnt/real-estate-data/models', exist_ok=True)
-joblib.dump({'model': model, 'features': FEATURES}, '/mnt/real-estate-data/models/xgboost_1m.pkl')
-```
-
-#### 2. Prediction Endpoint — `predict.py`
-Modal web endpoint that the Next.js frontend calls.
-
-- **Input:** `{ zipcode: "75252", bedrooms: 3 }`
+#### 3. POST /predict
+- **Input:** `{ "zipcode": "75252", "bedrooms": 3 }` (bedrooms: 2 | 3 | 4 | 5)
 - **Output:**
 ```json
 {
   "zipcode": "75252",
+  "city": "Dallas",
   "bedrooms": 3,
-  "predicted_price": 412500.00,
-  "direction": "up",
-  "confidence": 0.73,
   "current_price": 405000.00,
-  "predicted_change_dollars": 7500.00,
-  "predicted_change_pct": 1.85
+  "forecasts": [
+    { "horizon": "1m", "predicted_price": 412500.00, "predicted_change_dollars": 7500.00, "predicted_change_pct": 1.85, "direction": "up" },
+    { "horizon": "3m", "predicted_price": 418000.00, "predicted_change_dollars": 13000.00, "predicted_change_pct": 3.21, "direction": "up" },
+    { "horizon": "6m", "predicted_price": 422000.00, "predicted_change_dollars": 17000.00, "predicted_change_pct": 4.20, "direction": "up" }
+  ],
+  "direction_1m": { "direction": "up", "confidence": 0.73 }
 }
 ```
-- Load both models from Volume on startup
-- Use the same `FEATURES` list and scaler from the saved `.pkl` files
-- Validate zipcode is in the allowed list of 113 curated Dallas zipcodes
+- Uses XGBoost 1m/3m/6m for price forecasts; scales to bedroom tier via ZHVI ratio. LR provides 1-month direction + confidence.
 
-```python
-import modal
+#### 4. POST /history
+- **Input:** `{ "zipcode": "75252", "bedrooms": 3 }`
+- **Output:** `{ "zipcode": "75252", "bedrooms": 3, "data": [ { "date": "2019-01-01", "zhvi": 250000.0 }, ... ] }` — from 2019-01-01, sorted by date.
 
-app = modal.App("real-estate-predict")
-volume = modal.Volume.from_name("real-estate-data")
+#### 5. GET /zipcodes
+- **Output:** `[ { "zipcode": "75252", "city": "Dallas" }, ... ]` — all zipcodes in the latest snapshot (for frontend validation/dropdowns).
 
-image = modal.Image.debian_slim().pip_install(
-    "pandas", "scikit-learn", "xgboost", "joblib"
-)
-
-@app.function(image=image, volumes={"/mnt/real-estate-data": volume})
-@modal.web_endpoint(method="POST")
-def predict(data: dict):
-    import joblib, pandas as pd
-
-    xgb_artifacts  = joblib.load('/mnt/real-estate-data/models/xgboost_1m.pkl')
-    logreg_artifacts = joblib.load('/mnt/real-estate-data/models/baseline_logreg.pkl')
-
-    # build feature row from zipcode + bedrooms
-    # run both models
-    # return combined response
-    ...
-```
-
-#### 3. History Endpoint — `history.py`
-Returns historical ZHVI data for a given zipcode (for the chart on the frontend).
-
-- **Input:** `{ zipcode: "75252", bedrooms: 3 }`
-- **Output:** Array of `{ date, zhvi }` objects for the past 5 years
-- Reads directly from `dallas_clean.csv` on the Volume
-- Filter by zipcode, select the right bedroom column based on input
-
-```python
-@app.function(image=image, volumes={"/mnt/real-estate-data": volume})
-@modal.web_endpoint(method="POST")
-def history(data: dict):
-    import pandas as pd
-
-    df = pd.read_csv('/mnt/real-estate-data/data/dallas_clean.csv')
-    zipcode  = data['zipcode']
-    bedrooms = data['bedrooms']
-
-    bedroom_col_map = { 2: 'zhvi_2br', 3: 'zhvi_3br', 4: 'zhvi_4br', 5: 'zhvi_5br_plus' }
-    price_col = bedroom_col_map.get(bedrooms, 'ZHVI')
-
-    filtered = df[df['ZipCode'] == int(zipcode)][['Date', price_col]].dropna()
-    filtered = filtered.rename(columns={price_col: 'zhvi'})
-    filtered = filtered[filtered['Date'] >= '2019-01-01']
-
-    return filtered.to_dict(orient='records')
-```
-
-### Deploying endpoints
-```bash
-modal deploy predict.py
-modal deploy history.py
-```
-This gives you two public HTTPS URLs to plug into the Next.js API routes.
+### Volume paths (backend expects)
+- `/mnt/real-estate-data/data/dallas_clean.csv`
+- `/mnt/real-estate-data/data/train.csv`, `test.csv`
+- `/mnt/real-estate-data/models/xgboost_1m.pkl`, `xgboost_3m.pkl`, `xgboost_6m.pkl`
+- `/mnt/real-estate-data/models/logistic_regression.pkl`
+- `/mnt/real-estate-data/models/latest_data.pkl`
 
 ---
 
@@ -223,33 +161,26 @@ This gives you two public HTTPS URLs to plug into the Next.js API routes.
 - Simple, clean UI — target audience is homebuyers and sellers, not developers
 
 #### `app/dashboard/[zipcode]/page.tsx` — Dashboard Page
-Main output page. Receives zipcode and bedroom count, calls both Modal endpoints, renders results.
+Main output page. Receives zipcode and bedroom count, calls backend `/predict` and `/history`, renders results.
 
 Sections to build:
-1. **Header** — zipcode, city name, current price, year-over-year change
-2. **Historical price chart** — line chart from `history` endpoint, last 5 years of ZHVI
-3. **Forecast callout** — predicted price next month, dollar change, percent change
-4. **Confidence gauge** — directional signal from Logistic Regression ("73% confidence prices will rise")
-5. **Bedroom breakdown** — small cards showing current 2br/3br/4br/5br+ prices for this zipcode
+1. **Header** — zipcode, city name (from predict response), current price, year-over-year change
+2. **Historical price chart** — line chart from `/history` response (`data: [{ date, zhvi }]`), last 5 years of ZHVI
+3. **Forecast callout** — use `forecasts` from `/predict` (1m, 3m, 6m); show 1-month predicted price, dollar change, percent change; optionally show 3m/6m
+4. **Confidence gauge** — use `direction_1m` from `/predict` (`direction`, `confidence`)
+5. **Bedroom breakdown** — small cards showing current 2br/3br/4br/5br+ prices for this zipcode (can be derived from same backend data or a separate call if needed)
 
-#### `app/api/predict/route.ts` — API Route (proxy to Modal)
-```typescript
-export async function POST(req: Request) {
-  const body = await req.json();
+#### `app/api/predict/route.ts` — API Route (proxy to backend)
+- **Phase 3:** Replace mock with `POST` to backend base URL: `${MODAL_PREDICT_URL}/predict` (or single `MODAL_BACKEND_URL` + `/predict`).
+- **Request body:** `{ zipcode: string, bedrooms: 2 | 3 | 4 | 5 }`.
+- **Response shape:** `{ zipcode, city, bedrooms, current_price, forecasts: [{ horizon, predicted_price, predicted_change_dollars, predicted_change_pct, direction }], direction_1m: { direction, confidence } }`.
 
-  const res = await fetch(process.env.MODAL_PREDICT_URL!, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+#### `app/api/history/route.ts` — API Route (proxy to backend)
+- **Phase 3:** Replace mock with `POST` to backend: `${MODAL_HISTORY_URL}/history` or `${MODAL_BACKEND_URL}/history`.
+- **Response shape:** `{ zipcode, bedrooms, data: [{ date, zhvi }] }`.
 
-  const data = await res.json();
-  return Response.json(data);
-}
-```
-
-#### `app/api/history/route.ts` — API Route (proxy to Modal)
-Same pattern as above, calls `process.env.MODAL_HISTORY_URL`.
+#### `app/api/zipcodes/route.ts` (optional)
+- **Phase 3:** Optional GET proxy to backend `GET /zipcodes` for dynamic zipcode list: `[{ zipcode, city }]`. Frontend can use this instead of or in addition to `lib/dallas-zipcodes.json`.
 
 #### `components/PriceChart.tsx`
 ```typescript
@@ -275,10 +206,12 @@ Same pattern as above, calls `process.env.MODAL_HISTORY_URL`.
 ```
 
 ### Environment variables (`.env.local`)
+Backend is a single FastAPI app; one base URL can serve all routes:
 ```
-MODAL_PREDICT_URL=https://your-workspace--real-estate-predict.modal.run
-MODAL_HISTORY_URL=https://your-workspace--real-estate-history.modal.run
+MODAL_BACKEND_URL=https://your-workspace--your-app-name.modal.run
 ```
+Then: `POST ${MODAL_BACKEND_URL}/predict`, `POST ${MODAL_BACKEND_URL}/history`, `GET ${MODAL_BACKEND_URL}/zipcodes`.  
+(If you still use separate env vars: `MODAL_PREDICT_URL`, `MODAL_HISTORY_URL` — point them at the same base URL with path appended as needed.)
 
 ### Zipcode validation
 Use `dallas_zipcodes_reference.xlsx` (113 curated core Dallas zipcodes) for frontend validation.  
@@ -286,9 +219,9 @@ Convert to a static JSON file `lib/dallas-zipcodes.json` and validate on form su
 
 ---
 
-## What Comes After XGBoost
+## What Comes After Backend Merge
 
-Once XGBoost is trained and the endpoints are built, the remaining work is:
+Backend (XGBoost 1m/3m/6m, LR, /predict, /history, /zipcodes) is implemented. Remaining work:
 
 1. **Integration testing** — zip every valid Dallas zipcode through the predict endpoint, confirm no errors
 2. **Edge case handling** — what happens if a zipcode has sparse data? If bedrooms don't match available data?
@@ -310,10 +243,11 @@ Once XGBoost is trained and the endpoints are built, the remaining work is:
 | Features | 14 specific columns | Leakage investigation confirmed these are clean |
 | Removed features | `price_change_1m`, `price_change_3m` | 88.75% and 94.3% target alignment = leakage |
 | Kept feature | `price_change_12m` | 78% alignment is legitimate price momentum |
-| Baseline model | Logistic Regression 75.82% / 0.8231 AUC | Floor that XGBoost must beat |
-| Zipcode scope | 113 curated core Dallas zipcodes (frontend) | Trains on 255, serves 113 for cleaner UX |
+| Baseline model | Logistic Regression 75.82% / 0.8231 AUC | Floor; now integrated in backend /predict as direction_1m |
+| XGBoost horizons | 1m, 3m, 6m (regression) | Implemented in backend; forecasts array in /predict response |
+| Zipcode scope | 113 curated core Dallas zipcodes (frontend) | Trains on 255; GET /zipcodes returns available zipcodes |
 | Frontend stack | Next.js + Tailwind + Recharts on Vercel | Team decision, strong ecosystem |
-| Backend stack | Modal serverless | No infra to manage, direct Volume access |
+| Backend stack | Modal-served FastAPI (`backend/main.py`) | Single app: /predict, /history, /zipcodes; Volume for data/models |
 
 ---
 
@@ -341,20 +275,22 @@ If XGBoost does not meaningfully beat these numbers, ship with Logistic Regressi
 │   │       └── page.tsx   ← Main dashboard
 │   └── api/
 │       ├── predict/
-│       │   └── route.ts   ← Proxy to Modal predict endpoint
+│       │   └── route.ts   ← Proxy to backend /predict (Phase 3: replace mock)
 │       └── history/
-│           └── route.ts   ← Proxy to Modal history endpoint
+│           └── route.ts   ← Proxy to backend /history (Phase 3: replace mock)
 ├── components/
 │   ├── PriceChart.tsx
 │   ├── ConfidenceGauge.tsx
 │   └── BedroomCards.tsx
 ├── lib/
-│   └── dallas-zipcodes.json   ← 113 valid zipcodes for validation
-├── .env.local                 ← Modal endpoint URLs (never commit)
+│   └── dallas-zipcodes.json   ← 113 valid zipcodes (optional: use GET /zipcodes instead)
+├── .env.local                 ← MODAL_BACKEND_URL or MODAL_PREDICT_URL / MODAL_HISTORY_URL (never commit)
 │
-/modal/                    ← Modal Python scripts (separate from Next.js)
-├── train_baseline.py      ← Logistic Regression (DONE)
-├── train_xgboost.py       ← XGBoost regressor (TODO)
-├── predict.py             ← Prediction web endpoint (TODO)
-└── history.py             ← History web endpoint (TODO)
+backend/                   ← FastAPI app + training scripts (Modal Volume when deployed)
+├── main.py                ← FastAPI: POST /predict, POST /history, GET /zipcodes (DONE)
+├── train_logistic_regression.py  ← LR direction classifier (DONE)
+├── train_xgboost.py       ← XGBoost 1m/3m/6m regressors + latest_data.pkl (DONE)
+├── requirements.txt      ← fastapi, uvicorn, pandas, xgboost, scikit-learn, joblib, pydantic, etc.
+├── data/                  ← (optional local copies; production uses Modal Volume)
+└── models/                ← (optional local copies; production uses Modal Volume)
 ```
