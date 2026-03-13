@@ -29,7 +29,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (do not commit secrets; .env.local.example is the template)
 .env*
 
 # vercel
@@ -40,4 +40,8 @@ yarn-error.log*
 next-env.d.ts
 
 .DS_Store
-backend/__pycache__/main.cpython-311.pyc
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
