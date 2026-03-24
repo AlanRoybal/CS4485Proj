@@ -1,3 +1,41 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Development Commands
+
+### Frontend (Next.js)
+- `npm run dev` — Start dev server at localhost:3000
+- `npm run build` — Production build
+- `npm run lint` — ESLint
+- `npm run test` — Run all tests (Vitest)
+- `npm run test:watch` — Run tests in watch mode
+- Single test: `npx vitest run tests/SearchForm.test.tsx`
+
+### Backend (Modal-served FastAPI)
+- `modal deploy backend/main.py` — Deploy backend to Modal
+- `modal run backend/train_xgboost.py` — Train XGBoost models on Modal Volume
+- `python3 backend/train_logistic_regression.py` — Train LR classifier locally
+
+## Architecture
+
+Next.js 16 frontend (Vercel) + FastAPI backend (Modal serverless). No database — all data lives on a Modal Volume as CSV/parquet/pkl files.
+
+**Frontend → Backend flow:** Next.js API routes (`app/api/predict/route.ts`, `app/api/history/route.ts`) proxy to the Modal-hosted FastAPI app via `MODAL_BACKEND_URL` env var. Currently using mock data from `lib/mock-data.ts` (Phase 3 will wire to real backend).
+
+**Key frontend patterns:**
+- App Router with server components by default; `SearchForm` and `PriceChart` are client components (`'use client'`)
+- Tailwind CSS v4 with `@theme` in `app/globals.css` (not via tailwind.config.ts)
+- Recharts for all charts; MapLibre GL for the interactive map
+- Shared types in `lib/types.ts`; zipcode validation against `lib/dallas-zipcodes.json` (113 zipcodes)
+- Fonts: Gilda Display (headings) + DM Sans (body)
+
+**Backend:** Single FastAPI app (`backend/main.py`) with three endpoints: POST /predict, POST /history, GET /zipcodes. Models loaded once on startup from Modal Volume at `/mnt/real-estate-data/`.
+
+**Testing:** Vitest + @testing-library/react with jsdom. Tests live in `tests/`.
+
+---
+
 # Real Estate Market Analyzer — Project Guide
 **UT Dallas UTDesign Capstone | Spring 2026 | Advisor: Muhammad Ikram**
 
