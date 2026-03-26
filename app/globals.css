@@ -50,6 +50,17 @@ body {
   animation: shake 0.4s ease-in-out;
 }
 
+/* Skeleton shimmer sweep */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@utility animate-shimmer {
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

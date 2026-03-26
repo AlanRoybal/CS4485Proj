@@ -1,10 +1,17 @@
-import { MOCK_HISTORY, MOCK_PREDICTION, MOCK_BEDROOM_PRICES, MOCK_CITY, buildChartData } from '@/lib/mock-data'
+import { fetchPrediction, fetchHistory, fetchBedroomPrices, fetchModelMetrics, fetchModelInfo } from '@/lib/api'
+import { buildChartData } from '@/lib/mock-data'
 import DashboardHeader from '@/components/DashboardHeader'
-import ForecastCallout from '@/components/ForecastCallout'
+
+export const dynamic = 'force-dynamic'
+import ForecastTimeline from '@/components/ForecastTimeline'
 import PriceChart from '@/components/PriceChart'
 import ConfidenceGauge from '@/components/ConfidenceGauge'
 import BedroomCards from '@/components/BedroomCards'
+import MarketMomentum from '@/components/MarketMomentum'
+import ModelAccuracy from '@/components/ModelAccuracy'
+import ModelInsights from '@/components/ModelInsights'
 import DashboardMap from '@/components/DashboardMap'
+import { notFound } from 'next/navigation'
 
 export default async function DashboardPage({
   params,
@@ -17,23 +24,48 @@ export default async function DashboardPage({
   const { bedrooms: bedroomsStr } = await searchParams
   const bedrooms = parseInt(bedroomsStr ?? '3', 10)
 
-  // Phase 1: use mock data.
-  // Phase 3: replace with fetch('/api/predict', {...}) and fetch('/api/history', {...})
-  const prediction = MOCK_PREDICTION
-  const history = MOCK_HISTORY
-  const bedroomPrices = MOCK_BEDROOM_PRICES
-  const city = MOCK_CITY
+  let prediction: Awaited<ReturnType<typeof fetchPrediction>>
+  let history: Awaited<ReturnType<typeof fetchHistory>>
+  let bedroomData: Awaited<ReturnType<typeof fetchBedroomPrices>>
+  let modelMetrics: Awaited<ReturnType<typeof fetchModelMetrics>>
+  let modelInfo: Awaited<ReturnType<typeof fetchModelInfo>>
 
-  // Build chart data (historical + forecast extension point)
+  try {
+    ;[prediction, history, bedroomData, modelMetrics, modelInfo] = await Promise.all([
+      fetchPrediction(zipcode, bedrooms),
+      fetchHistory(zipcode, bedrooms),
+      fetchBedroomPrices(zipcode),
+      fetchModelMetrics(),
+      fetchModelInfo(),
+    ])
+  } catch (err) {
+    const message = err instanceof Error ? err.message : ''
+    if (message.includes('not found')) notFound()
+    throw err
+  }
+
+  const { prices: bedroomPrices, city } = bedroomData
   const chartData = buildChartData(history, prediction)
 
-  // Compute YoY change from history data
   const sortedHistory = [...history].sort((a, b) => a.date.localeCompare(b.date))
   const currentPrice = sortedHistory[sortedHistory.length - 1]?.zhvi ?? prediction.current_price
   const twelveMonthsAgo = sortedHistory[sortedHistory.length - 13]?.zhvi ?? currentPrice
   const yoyChange = twelveMonthsAgo > 0
     ? ((currentPrice - twelveMonthsAgo) / twelveMonthsAgo) * 100
     : 0
+
+  // Market momentum: compute 3m, 6m, 12m price changes from history
+  const momentumPeriods = [
+    { label: '3 Months', months: 3 },
+    { label: '6 Months', months: 6 },
+    { label: '12 Months', months: 12 },
+  ].map(({ label, months }) => {
+    const pastPrice = sortedHistory[sortedHistory.length - 1 - months]?.zhvi
+    const pct = pastPrice && pastPrice > 0
+      ? ((currentPrice - pastPrice) / pastPrice) * 100
+      : 0
+    return { label, pct }
+  })
 
   return (
     <main className="min-h-[calc(100dvh-56px)]">
@@ -55,7 +87,7 @@ export default async function DashboardPage({
               <div className="flex items-center gap-2 mb-4">
                 <div className="h-px w-5 bg-teal-800" />
                 <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
-                  5-Year Price History
+                  12-Month Trend &amp; Forecast
                 </h2>
               </div>
               <div className="bg-white rounded border border-gray-200/80 p-6">
@@ -63,39 +95,61 @@ export default async function DashboardPage({
               </div>
             </section>
 
-            {/* Forecast + Confidence */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px w-5 bg-teal-800" />
-                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
-                    1-Month Forecast
-                  </h2>
-                </div>
-                <ForecastCallout
-                  predictedPrice={prediction.predicted_price}
-                  currentPrice={prediction.current_price}
-                  changeDollars={prediction.predicted_change_dollars}
-                  changePct={prediction.predicted_change_pct}
-                  direction={prediction.direction}
-                />
-              </section>
+            {/* Price Forecasts (1m, 3m, 6m) */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-px w-5 bg-teal-800" />
+                <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                  Price Forecasts
+                </h2>
+              </div>
+              <ForecastTimeline
+                forecasts={prediction.forecasts}
+                currentPrice={prediction.current_price}
+              />
+            </section>
 
+            {/* Direction Signal */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-px w-5 bg-teal-800" />
+                <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                  Direction Signal
+                </h2>
+              </div>
+              <ConfidenceGauge
+                direction={prediction.direction}
+                confidence={prediction.confidence}
+                explanation={prediction.direction_explanation}
+                momentumPeriods={momentumPeriods}
+              />
+            </section>
+
+            {/* Model Accuracy */}
+            {modelMetrics && Object.keys(modelMetrics).length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-px w-5 bg-teal-800" />
                   <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
-                    Direction Signal
+                    Model Accuracy
                   </h2>
                 </div>
-                <div className="bg-white rounded border border-gray-200/80 p-6 flex flex-col items-center justify-center h-[calc(100%-2rem)]">
-                  <ConfidenceGauge
-                    direction={prediction.direction}
-                    confidence={prediction.confidence}
-                  />
-                </div>
+                <ModelAccuracy metrics={modelMetrics} />
               </section>
-            </div>
+            )}
+
+            {/* How We Predict */}
+            {modelInfo && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px w-5 bg-teal-800" />
+                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                    How We Predict
+                  </h2>
+                </div>
+                <ModelInsights info={modelInfo} />
+              </section>
+            )}
           </div>
         </div>
 
@@ -140,6 +194,14 @@ export default async function DashboardPage({
                     {yoyChange >= 0 ? '+' : ''}{yoyChange.toFixed(1)}%
                   </p>
                 </div>
+              </div>
+
+              {/* Market momentum */}
+              <div>
+                <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-gray-400 mb-3">
+                  Market Momentum
+                </p>
+                <MarketMomentum periods={momentumPeriods} />
               </div>
 
               {/* Bedroom cards */}

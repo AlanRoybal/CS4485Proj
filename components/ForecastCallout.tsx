@@ -6,14 +6,21 @@ interface Props {
   changeDollars: number
   changePct: number
   direction: 'up' | 'down'
+  forecastDate?: string // YYYY-MM-DD
 }
 
 function formatPrice(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 }
 
-export default function ForecastCallout({ predictedPrice, changeDollars, changePct, direction }: Props) {
+export default function ForecastCallout({ predictedPrice, changeDollars, changePct, direction, forecastDate }: Props) {
   const isUp = direction === 'up'
+
+  const forecastLabel = forecastDate
+    ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
+        new Date(forecastDate + 'T12:00:00'),
+      )
+    : 'next month'
 
   return (
     <div className={`rounded border p-6 h-[calc(100%-2rem)] ${
@@ -34,7 +41,7 @@ export default function ForecastCallout({ predictedPrice, changeDollars, changeP
           {isUp ? '+' : ''}{formatPrice(changeDollars)} ({isUp ? '+' : ''}{changePct.toFixed(2)}%)
         </span>
       </div>
-      <p className="text-xs text-gray-400 mt-2">Predicted change next month</p>
+      <p className="text-xs text-gray-400 mt-2">Forecast for {forecastLabel}</p>
     </div>
   )
 }
