@@ -128,6 +128,7 @@ print("\nTraining Logistic Regression...")
 model = LogisticRegression(
     max_iter=1000,
     random_state=42,
+    class_weight="balanced",  # handle Up/Down class imbalance
 )
 model.fit(X_train_scaled, y_train)
 print("  Training complete ✓")
@@ -161,13 +162,104 @@ print()
 #   proba = art["model"].predict_proba(X_scaled)[0]
 #   direction = "up" if proba[1] >= 0.5 else "down"
 #   confidence = float(max(proba))
-artifact = {
+artifact_lr = {
     "model":    model,
     "scaler":   scaler,
     "features": FEATURE_COLS,
 }
 
-joblib.dump(artifact, SAVE_PATH)
-print(f"  Saved to: {SAVE_PATH}")
-print(f"  Keys:     {list(artifact.keys())}")
+# ── 9. Train XGBoost Classifier ──────────────────────────────────────────
+import xgboost as xgbc
+
+print("\n" + "=" * 55)
+print("  TRAINING XGBOOST DIRECTION CLASSIFIER")
+print("=" * 55)
+
+# Calculate scale_pos_weight for class imbalance (ratio of down/up in training)
+n_down_train = (y_train == 0).sum()
+n_up_train   = (y_train == 1).sum()
+scale_pos = n_down_train / n_up_train if n_up_train > 0 else 1.0
+print(f"  scale_pos_weight: {scale_pos:.2f} (Down={n_down_train:,} / Up={n_up_train:,})")
+
+xgb_clf = xgbc.XGBClassifier(
+    n_estimators=1000,
+    learning_rate=0.05,
+    max_depth=6,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    min_child_weight=5,
+    reg_alpha=0.1,
+    reg_lambda=1.0,
+    scale_pos_weight=scale_pos,
+    early_stopping_rounds=50,
+    random_state=42,
+    n_jobs=-1,
+    tree_method="hist",
+    eval_metric="logloss",
+)
+
+# XGBoost doesn't need scaling — train on raw features
+xgb_clf.fit(
+    X_train, y_train,
+    eval_set=[(X_test, y_test)],
+    verbose=100,
+)
+
+y_pred_xgb       = xgb_clf.predict(X_test)
+y_pred_proba_xgb = xgb_clf.predict_proba(X_test)[:, 1]
+
+accuracy_xgb = accuracy_score(y_test, y_pred_xgb)
+auc_roc_xgb  = roc_auc_score(y_test, y_pred_proba_xgb)
+cm_xgb       = confusion_matrix(y_test, y_pred_xgb)
+
+print("\n" + "=" * 55)
+print("  XGBOOST DIRECTION CLASSIFIER RESULTS")
+print("=" * 55)
+print(f"  Accuracy:  {accuracy_xgb:.4f}  ({accuracy_xgb*100:.2f}%)")
+print(f"  AUC-ROC:   {auc_roc_xgb:.4f}")
+print()
+print("  Classification Report:")
+print(classification_report(y_test, y_pred_xgb, target_names=["Down", "Up"]))
+print("  Confusion Matrix:")
+print(f"                  Predicted Down   Predicted Up")
+print(f"  Actually Down     {cm_xgb[0][0]:>6,}          {cm_xgb[0][1]:>6,}")
+print(f"  Actually Up       {cm_xgb[1][0]:>6,}          {cm_xgb[1][1]:>6,}")
+print()
+
+artifact_xgb = {
+    "model":    xgb_clf,
+    "scaler":   None,       # XGBoost doesn't need scaling
+    "features": FEATURE_COLS,
+}
+
+# ── 10. Compare and save the best model ───────────────────────────────────
+print("=" * 55)
+print("  HEAD-TO-HEAD COMPARISON")
+print("=" * 55)
+print(f"  {'Metric':<20}  {'LR (balanced)':>14}  {'XGBoost':>14}")
+print(f"  {'─'*20}  {'─'*14}  {'─'*14}")
+print(f"  {'Accuracy':<20}  {accuracy*100:>13.2f}%  {accuracy_xgb*100:>13.2f}%")
+print(f"  {'AUC-ROC':<20}  {auc_roc:>14.4f}  {auc_roc_xgb:>14.4f}")
+print(f"  {'Down recall':<20}  {cm[0][0]/(cm[0][0]+cm[0][1])*100:>13.1f}%  {cm_xgb[0][0]/(cm_xgb[0][0]+cm_xgb[0][1])*100:>13.1f}%")
+print(f"  {'Up recall':<20}  {cm[1][1]/(cm[1][0]+cm[1][1])*100:>13.1f}%  {cm_xgb[1][1]/(cm_xgb[1][0]+cm_xgb[1][1])*100:>13.1f}%")
+
+# Pick the model with higher AUC-ROC
+if auc_roc_xgb > auc_roc:
+    print(f"\n  → XGBoost wins (AUC {auc_roc_xgb:.4f} > {auc_roc:.4f}). Saving XGBoost as direction model.")
+    best_artifact = artifact_xgb
+    best_name = "XGBoost"
+else:
+    print(f"\n  → LR wins (AUC {auc_roc:.4f} >= {auc_roc_xgb:.4f}). Saving LR as direction model.")
+    best_artifact = artifact_lr
+    best_name = "Logistic Regression"
+
+joblib.dump(best_artifact, SAVE_PATH)
+print(f"  Saved best ({best_name}) to: {SAVE_PATH}")
+print(f"  Keys:     {list(best_artifact.keys())}")
+
+# Also save the runner-up for reference
+runner_up_path = SAVE_PATH.replace(".pkl", "_runner_up.pkl")
+runner_up_artifact = artifact_lr if best_name == "XGBoost" else artifact_xgb
+joblib.dump(runner_up_artifact, runner_up_path)
+print(f"  Saved runner-up to: {runner_up_path}")
 print("  Done ✓")
