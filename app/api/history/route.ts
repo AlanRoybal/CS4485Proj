@@ -1,7 +1,27 @@
-import { MOCK_HISTORY } from '@/lib/mock-data'
+import { fetchHistory } from '@/lib/api'
 
-export async function POST(_req: Request) {
-  // Phase 1: returns mock data
-  // Phase 3: replace with fetch to MODAL_HISTORY_URL
-  return Response.json(MOCK_HISTORY)
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const { zipcode, bedrooms } = body as { zipcode?: string; bedrooms?: number }
+
+    if (!zipcode || !/^\d{5}$/.test(zipcode)) {
+      return Response.json({ error: 'zipcode must be a 5-digit string' }, { status: 400 })
+    }
+    if (!bedrooms || ![2, 3, 4, 5].includes(bedrooms)) {
+      return Response.json({ error: 'bedrooms must be 2, 3, 4, or 5' }, { status: 400 })
+    }
+
+    const data = await fetchHistory(zipcode, bedrooms)
+    return Response.json(data)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    if (message.includes('not configured')) {
+      return Response.json({ error: 'Backend not configured' }, { status: 503 })
+    }
+    if (message.includes('not found')) {
+      return Response.json({ error: message }, { status: 404 })
+    }
+    return Response.json({ error: message }, { status: 502 })
+  }
 }
