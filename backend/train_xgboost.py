@@ -20,7 +20,7 @@ DATA_DIR  = "/mnt/real-estate-data/data"  if _ON_MODAL else "."
 MODEL_DIR = "/mnt/real-estate-data/models" if _ON_MODAL else "./models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-SPLIT_DATE = "2023-01-01"   # time-based train/test boundary — do not change
+SPLIT_DATE = "2025-01-01"   # time-based train/test boundary (moved from 2023 to capture recent market patterns)
 
 # 14 leakage-free features (price_change_1m and price_change_3m excluded)
 FEATURES = [

@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Change History
+
+The `.history/` directory contains detailed logs of all major work sessions — files modified, design decisions, data flow changes, and known issues. **Always read relevant `.history/` entries before building on existing features** to understand what was done, why, and what state things are in.
+
+Current entries:
+- `.history/2025-03-25_frontend-backend-connect.md` — Frontend-backend wiring, chart/gauge redesigns, loading skeleton, real-time forecast pipeline
+- `.history/2026-03-25_model-retrain-improvements.md` — Data refresh (Feb 2026), split moved to Jan 2025, LR balanced weights, XGBoost-derived direction, current-month forecast dates
+
+---
+
 ## Development Commands
 
 ### Frontend (Next.js)
