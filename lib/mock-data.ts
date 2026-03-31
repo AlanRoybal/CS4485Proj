@@ -81,17 +81,16 @@ export function buildChartData(
     historical[historical.length - 1].forecast = prediction.current_price
   }
 
-  // Plot all forecast horizons (1m, 3m, 6m) as separate points on the dashed line
+  // Only show the 1-month forecast point on the chart
   const forecasts = prediction.forecasts ?? []
-  if (forecasts.length > 0) {
-    for (const f of forecasts) {
-      historical.push({
-        date: f.forecast_date,
-        forecast: f.predicted_price,
-      })
-    }
+  const forecast1m = forecasts.find(f => f.horizon === '1m')
+  if (forecast1m) {
+    historical.push({
+      date: forecast1m.forecast_date,
+      forecast: forecast1m.predicted_price,
+    })
   } else {
-    // Fallback: single forecast point (backwards compat)
+    // Fallback: single forecast point
     let forecastDate = prediction.forecast_date
     if (!forecastDate && source.length > 0) {
       const lastDate = source[source.length - 1].date
