@@ -146,6 +146,122 @@ export async function fetchModelMetrics(): Promise<ModelMetrics> {
  * Fetch current median prices for all bedroom tiers (2–5) by calling
  * /predict for each. Returns the BedroomPrices map and the city name.
  */
+// ---------------------------------------------------------------------------
+// Backtest
+// ---------------------------------------------------------------------------
+export interface BacktestPoint {
+  date: string
+  predicted: number
+  actual: number
+  error_pct: number
+}
+
+export interface BacktestResult {
+  zipcode: string
+  bedrooms: number
+  data: BacktestPoint[]
+  avg_error_dollars: number
+  avg_error_pct: number
+}
+
+export async function fetchBacktest(
+  zipcode: string,
+  bedrooms: number,
+): Promise<BacktestResult | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/backtest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipcode, bedrooms }),
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    return res.json()
+  } catch { return null }
+}
+
+// ---------------------------------------------------------------------------
+// Zipcode Profile
+// ---------------------------------------------------------------------------
+export interface SeasonalPoint {
+  month: string
+  avg_change_pct: number
+}
+
+export interface ZipcodeProfileResult {
+  zipcode: string
+  volatility_percentile: number
+  predictability_label: string
+  seasonal: SeasonalPoint[]
+}
+
+export async function fetchZipcodeProfile(
+  zipcode: string,
+  bedrooms: number,
+): Promise<ZipcodeProfileResult | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/zipcode-profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipcode, bedrooms }),
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    return res.json()
+  } catch { return null }
+}
+
+// ---------------------------------------------------------------------------
+// Detailed Model Info (all features x all horizons)
+// ---------------------------------------------------------------------------
+export interface DetailedModelInfo {
+  [horizon: string]: { feature: string; importance: number }[]
+}
+
+export async function fetchModelInfoDetailed(): Promise<DetailedModelInfo | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/model-info-detailed`, { cache: 'no-store' })
+    if (!res.ok) return null
+    return res.json()
+  } catch { return null }
+}
+
+// ---------------------------------------------------------------------------
+// XGBoost Deep Dive
+// ---------------------------------------------------------------------------
+export interface XGBoostDeepDiveInfo {
+  algorithm: {
+    name: string
+    type: string
+    description: string
+  }
+  hyperparameters: Record<string, number>
+  hyperparameter_descriptions: Record<string, string>
+  training: {
+    split_date: string
+    num_features: number
+    horizons: string[]
+    trees_used: Record<string, number>
+    train_rows: number
+    test_rows: number
+    date_range_start: string
+    date_range_end: string
+  }
+  features: { name: string; label: string; category: string }[]
+  prediction_steps: string[]
+}
+
+export async function fetchModelDeepDive(): Promise<XGBoostDeepDiveInfo | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/model-deep-dive`, { cache: 'no-store' })
+    if (!res.ok) return null
+    return res.json()
+  } catch { return null }
+}
+
+// ---------------------------------------------------------------------------
+// Bedroom Prices
+// ---------------------------------------------------------------------------
 export async function fetchBedroomPrices(
   zipcode: string,
 ): Promise<{ prices: BedroomPrices; city: string }> {

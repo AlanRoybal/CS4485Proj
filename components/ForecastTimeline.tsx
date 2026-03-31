@@ -1,9 +1,11 @@
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import type { ForecastHorizon } from '@/lib/types'
+import type { ModelMetrics } from '@/lib/api'
 
 interface Props {
   forecasts: ForecastHorizon[]
   currentPrice: number
+  modelMetrics?: ModelMetrics
 }
 
 const HORIZON_LABELS: Record<string, string> = {
@@ -22,11 +24,15 @@ function formatDate(dateStr: string): string {
   )
 }
 
-export default function ForecastTimeline({ forecasts, currentPrice }: Props) {
+export default function ForecastTimeline({ forecasts, currentPrice, modelMetrics }: Props) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {forecasts.map((f) => {
         const isUp = f.direction === 'up'
+        const mape = modelMetrics?.[f.horizon]?.mape
+        const rangeLow = mape != null ? f.predicted_price * (1 - mape / 100) : null
+        const rangeHigh = mape != null ? f.predicted_price * (1 + mape / 100) : null
+
         return (
           <div
             key={f.horizon}
@@ -39,9 +45,14 @@ export default function ForecastTimeline({ forecasts, currentPrice }: Props) {
             <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-gray-400 mb-2">
               {HORIZON_LABELS[f.horizon] ?? f.horizon}
             </p>
-            <p className="font-serif text-2xl text-gray-950 mb-2">
+            <p className="font-serif text-2xl text-gray-950 mb-1">
               {formatPrice(f.predicted_price)}
             </p>
+            {rangeLow != null && rangeHigh != null && (
+              <p className="text-[10px] text-gray-400 mb-2">
+                Expected range: {formatPrice(rangeLow)} – {formatPrice(rangeHigh)}
+              </p>
+            )}
             <div className={`flex items-center gap-1.5 text-sm font-semibold ${
               isUp ? 'text-emerald-700' : 'text-red-600'
             }`}>

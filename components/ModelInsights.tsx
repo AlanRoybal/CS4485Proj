@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import type { ModelInfo } from '@/lib/api'
+import type { ModelInfo, DetailedModelInfo } from '@/lib/api'
 
 interface Props {
   info: ModelInfo
+  detailedInfo?: DetailedModelInfo | null
 }
 
 const FEATURE_DESCRIPTIONS: Record<string, string> = {
@@ -38,9 +39,23 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
     'A ranking of this zipcode by number of homes. Larger markets tend to be more stable and predictable; smaller ones can be more volatile.',
 }
 
-export default function ModelInsights({ info }: Props) {
+const HORIZON_LABELS: Record<string, string> = {
+  '1m': '1 Month',
+  '3m': '3 Months',
+  '6m': '6 Months',
+}
+
+export default function ModelInsights({ info, detailedInfo }: Props) {
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null)
-  const maxImp = info.top_drivers[0]?.importance ?? 1
+  const [selectedHorizon, setSelectedHorizon] = useState<string>('1m')
+  const [showAll, setShowAll] = useState(false)
+
+  // Use detailed info for the selected horizon if available, otherwise fall back to top_drivers
+  const hasDetailed = detailedInfo && detailedInfo[selectedHorizon]
+  const allDrivers = hasDetailed ? detailedInfo[selectedHorizon] : info.top_drivers
+  const drivers = showAll ? allDrivers : allDrivers.slice(0, 5)
+  const maxImp = allDrivers[0]?.importance ?? 1
+
   const startYear = new Date(info.dataset.date_range_start + 'T12:00:00').getFullYear()
   const endDate = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
     new Date(info.dataset.date_range_end + 'T12:00:00'),
@@ -48,13 +63,35 @@ export default function ModelInsights({ info }: Props) {
 
   return (
     <div className="bg-white rounded border border-gray-200/80 p-6 space-y-5">
+      {/* Horizon tabs */}
+      {hasDetailed && (
+        <div className="flex gap-1 p-1 bg-gray-50 rounded-lg w-fit">
+          {(['1m', '3m', '6m'] as const).map((h) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => { setSelectedHorizon(h); setShowAll(false) }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                selectedHorizon === h
+                  ? 'bg-white text-teal-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {HORIZON_LABELS[h]}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Top drivers */}
       <div>
         <p className="text-sm text-gray-600 mb-4">
-          The model weighs these factors when generating forecasts. Tap any factor to learn more.
+          {hasDetailed
+            ? `Factors driving the ${HORIZON_LABELS[selectedHorizon]?.toLowerCase()} forecast. Tap any factor to learn more.`
+            : 'The model weighs these factors when generating forecasts. Tap any factor to learn more.'}
         </p>
         <div className="space-y-1">
-          {info.top_drivers.map((d) => {
+          {drivers.map((d) => {
             const pct = (d.importance / maxImp) * 100
             const description = FEATURE_DESCRIPTIONS[d.feature]
             const isExpanded = expandedFeature === d.feature
@@ -128,6 +165,17 @@ export default function ModelInsights({ info }: Props) {
             )
           })}
         </div>
+
+        {/* Show all / show less toggle */}
+        {hasDetailed && allDrivers.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="mt-2 px-3 text-xs text-teal-700 hover:text-teal-900 font-medium"
+          >
+            {showAll ? 'Show top 5' : `Show all ${allDrivers.length} factors`}
+          </button>
+        )}
       </div>
 
       {/* Dataset quick facts */}

@@ -1,4 +1,5 @@
-import { fetchPrediction, fetchHistory, fetchBedroomPrices, fetchModelMetrics, fetchModelInfo } from '@/lib/api'
+import { fetchPrediction, fetchHistory, fetchBedroomPrices, fetchModelMetrics, fetchModelInfo, fetchBacktest, fetchZipcodeProfile, fetchModelInfoDetailed, fetchModelDeepDive } from '@/lib/api'
+import type { BacktestResult, ZipcodeProfileResult, DetailedModelInfo, XGBoostDeepDiveInfo } from '@/lib/api'
 import { buildChartData } from '@/lib/mock-data'
 import DashboardHeader from '@/components/DashboardHeader'
 
@@ -10,7 +11,11 @@ import BedroomCards from '@/components/BedroomCards'
 import MarketMomentum from '@/components/MarketMomentum'
 import ModelAccuracy from '@/components/ModelAccuracy'
 import ModelInsights from '@/components/ModelInsights'
+import BacktestChart from '@/components/BacktestChart'
+import ZipcodeProfile from '@/components/ZipcodeProfile'
+import PredictionPipeline from '@/components/PredictionPipeline'
 import DashboardMap from '@/components/DashboardMap'
+import XGBoostDeepDive from '@/components/XGBoostDeepDive'
 import { notFound } from 'next/navigation'
 
 export default async function DashboardPage({
@@ -29,14 +34,22 @@ export default async function DashboardPage({
   let bedroomData: Awaited<ReturnType<typeof fetchBedroomPrices>>
   let modelMetrics: Awaited<ReturnType<typeof fetchModelMetrics>>
   let modelInfo: Awaited<ReturnType<typeof fetchModelInfo>>
+  let backtestData: BacktestResult | null
+  let zipcodeProfileData: ZipcodeProfileResult | null
+  let detailedModelInfo: DetailedModelInfo | null
+  let deepDiveInfo: XGBoostDeepDiveInfo | null
 
   try {
-    ;[prediction, history, bedroomData, modelMetrics, modelInfo] = await Promise.all([
+    ;[prediction, history, bedroomData, modelMetrics, modelInfo, backtestData, zipcodeProfileData, detailedModelInfo, deepDiveInfo] = await Promise.all([
       fetchPrediction(zipcode, bedrooms),
       fetchHistory(zipcode, bedrooms),
       fetchBedroomPrices(zipcode),
       fetchModelMetrics(),
       fetchModelInfo(),
+      fetchBacktest(zipcode, bedrooms),
+      fetchZipcodeProfile(zipcode, bedrooms),
+      fetchModelInfoDetailed(),
+      fetchModelDeepDive(),
     ])
   } catch (err) {
     const message = err instanceof Error ? err.message : ''
@@ -106,6 +119,7 @@ export default async function DashboardPage({
               <ForecastTimeline
                 forecasts={prediction.forecasts}
                 currentPrice={prediction.current_price}
+                modelMetrics={modelMetrics}
               />
             </section>
 
@@ -124,6 +138,32 @@ export default async function DashboardPage({
                 momentumPeriods={momentumPeriods}
               />
             </section>
+
+            {/* Your Zipcode's Profile */}
+            {zipcodeProfileData && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px w-5 bg-teal-800" />
+                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                    Your Zipcode&apos;s Profile
+                  </h2>
+                </div>
+                <ZipcodeProfile profile={zipcodeProfileData} />
+              </section>
+            )}
+
+            {/* How Accurate Have We Been? */}
+            {backtestData && backtestData.data.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px w-5 bg-teal-800" />
+                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                    How Accurate Have We Been?
+                  </h2>
+                </div>
+                <BacktestChart backtest={backtestData} />
+              </section>
+            )}
 
             {/* Model Accuracy */}
             {modelMetrics && Object.keys(modelMetrics).length > 0 && (
@@ -147,7 +187,32 @@ export default async function DashboardPage({
                     How We Predict
                   </h2>
                 </div>
-                <ModelInsights info={modelInfo} />
+                {/* Pipeline visual */}
+                <div className="bg-white rounded border border-gray-200/80 p-4 mb-4">
+                  <PredictionPipeline
+                    info={modelInfo}
+                    predictedPrice={prediction.predicted_price}
+                    mape={modelMetrics?.['1m']?.mape}
+                  />
+                </div>
+                <ModelInsights info={modelInfo} detailedInfo={detailedModelInfo} />
+              </section>
+            )}
+
+            {/* Under the Hood: XGBoost */}
+            {modelInfo && modelMetrics && Object.keys(modelMetrics).length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px w-5 bg-teal-800" />
+                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                    Under the Hood: XGBoost
+                  </h2>
+                </div>
+                <XGBoostDeepDive
+                  metrics={modelMetrics}
+                  info={modelInfo}
+                  deepDive={deepDiveInfo}
+                />
               </section>
             )}
           </div>
