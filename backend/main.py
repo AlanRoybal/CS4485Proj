@@ -8,7 +8,7 @@ Endpoints:
   GET  /data-info — metadata about the dataset (latest date, forecast dates)
 
 Deploy:
-  modal deploy backend/main.py
+  modal deploy backend/modal_app.py
 
 Volume layout (real-estate-data):
   /data/dallas_clean.csv
