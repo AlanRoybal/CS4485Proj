@@ -16,6 +16,8 @@ import ZipcodeProfile from '@/components/ZipcodeProfile'
 import PredictionPipeline from '@/components/PredictionPipeline'
 import DashboardMap from '@/components/DashboardMap'
 import XGBoostDeepDive from '@/components/XGBoostDeepDive'
+import MortgageRateContext from '@/components/MortgageRateContext'
+import BathroomImpact from '@/components/BathroomImpact'
 import { notFound } from 'next/navigation'
 
 export default async function DashboardPage({
@@ -23,11 +25,12 @@ export default async function DashboardPage({
   searchParams,
 }: {
   params: Promise<{ zipcode: string }>
-  searchParams: Promise<{ bedrooms?: string }>
+  searchParams: Promise<{ bedrooms?: string; bathrooms?: string }>
 }) {
   const { zipcode } = await params
-  const { bedrooms: bedroomsStr } = await searchParams
+  const { bedrooms: bedroomsStr, bathrooms: bathroomsStr } = await searchParams
   const bedrooms = parseInt(bedroomsStr ?? '3', 10)
+  const bathrooms = parseInt(bathroomsStr ?? '2', 10)
 
   let prediction: Awaited<ReturnType<typeof fetchPrediction>>
   let history: Awaited<ReturnType<typeof fetchHistory>>
@@ -41,13 +44,13 @@ export default async function DashboardPage({
 
   try {
     ;[prediction, history, bedroomData, modelMetrics, modelInfo, backtestData, zipcodeProfileData, detailedModelInfo, deepDiveInfo] = await Promise.all([
-      fetchPrediction(zipcode, bedrooms),
-      fetchHistory(zipcode, bedrooms),
-      fetchBedroomPrices(zipcode),
+      fetchPrediction(zipcode, bedrooms, bathrooms),
+      fetchHistory(zipcode, bedrooms, bathrooms),
+      fetchBedroomPrices(zipcode, bathrooms),
       fetchModelMetrics(),
       fetchModelInfo(),
-      fetchBacktest(zipcode, bedrooms),
-      fetchZipcodeProfile(zipcode, bedrooms),
+      fetchBacktest(zipcode, bedrooms, bathrooms),
+      fetchZipcodeProfile(zipcode, bedrooms, bathrooms),
       fetchModelInfoDetailed(),
       fetchModelDeepDive(),
     ])
@@ -91,6 +94,7 @@ export default async function DashboardPage({
               zipcode={zipcode}
               city={city}
               bedrooms={bedrooms}
+              bathrooms={bathrooms}
               currentPrice={currentPrice}
               yoyChange={yoyChange}
             />
@@ -123,6 +127,21 @@ export default async function DashboardPage({
               />
             </section>
 
+            {/* Bathroom Impact */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-px w-5 bg-teal-800" />
+                <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                  Bathroom Impact
+                </h2>
+              </div>
+              <BathroomImpact
+                bedrooms={bedrooms}
+                bathrooms={bathrooms}
+                currentPrice={currentPrice}
+              />
+            </section>
+
             {/* Direction Signal */}
             <section>
               <div className="flex items-center gap-2 mb-4">
@@ -138,6 +157,22 @@ export default async function DashboardPage({
                 momentumPeriods={momentumPeriods}
               />
             </section>
+
+            {/* Mortgage Rate Context */}
+            {prediction.current_mortgage_rate != null && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px w-5 bg-teal-800" />
+                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                    Rate Environment
+                  </h2>
+                </div>
+                <MortgageRateContext
+                  rate={prediction.current_mortgage_rate}
+                  dataDate={prediction.data_date}
+                />
+              </section>
+            )}
 
             {/* Your Zipcode's Profile */}
             {zipcodeProfileData && (
@@ -188,12 +223,23 @@ export default async function DashboardPage({
                   </h2>
                 </div>
                 {/* Pipeline visual */}
-                <div className="bg-white rounded border border-gray-200/80 p-4 mb-4">
+                <div className="bg-white rounded border border-gray-200/80 p-4 mb-2">
                   <PredictionPipeline
                     info={modelInfo}
                     predictedPrice={prediction.predicted_price}
                     mape={modelMetrics?.['1m']?.mape}
                   />
+                </div>
+                {/* Data source attribution */}
+                <div className="flex items-center gap-4 px-1 py-2 mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-600" />
+                    <span className="text-[11px] text-gray-500">Home prices: <span className="font-medium text-gray-700">Zillow ZHVI</span></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span className="text-[11px] text-gray-500">Mortgage rates: <span className="font-medium text-gray-700">Freddie Mac / FRED</span></span>
+                  </div>
                 </div>
                 <ModelInsights info={modelInfo} detailedInfo={detailedModelInfo} />
               </section>
@@ -274,7 +320,7 @@ export default async function DashboardPage({
                 <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-gray-400 mb-3">
                   By Bedroom Count
                 </p>
-                <BedroomCards prices={bedroomPrices} selectedBedrooms={bedrooms} />
+                <BedroomCards prices={bedroomPrices} selectedBedrooms={bedrooms} bathrooms={bathrooms} />
               </div>
             </div>
           </div>

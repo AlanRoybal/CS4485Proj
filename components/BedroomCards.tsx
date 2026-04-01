@@ -3,6 +3,7 @@ import type { BedroomPrices } from '@/lib/types'
 interface Props {
   prices: BedroomPrices
   selectedBedrooms: number  // 2, 3, 4, or 5
+  bathrooms?: number        // 1, 2, 3, or 4
 }
 
 const BEDROOM_LABELS: Array<{ key: keyof BedroomPrices; label: string; value: number }> = [
@@ -20,7 +21,11 @@ function formatPrice(n: number): string {
   }).format(n)
 }
 
-export default function BedroomCards({ prices, selectedBedrooms }: Props) {
+export default function BedroomCards({ prices, selectedBedrooms, bathrooms }: Props) {
+  const bathLabel = bathrooms != null && bathrooms !== 2
+    ? ` · ${bathrooms === 4 ? '4+' : bathrooms} bath`
+    : ''
+
   return (
     <div className="space-y-2" role="list" aria-label="Bedroom price breakdown">
       {BEDROOM_LABELS.map(({ key, label, value }) => {
@@ -36,7 +41,7 @@ export default function BedroomCards({ prices, selectedBedrooms }: Props) {
             }`}
           >
             <span className={`text-sm font-medium ${isSelected ? 'text-teal-100' : 'text-gray-500'}`}>
-              {label}
+              {label}{bathLabel}
             </span>
             <span className={`text-sm font-semibold tabular-nums ${isSelected ? 'text-white' : 'text-gray-900'}`}>
               {formatPrice(prices[key])}

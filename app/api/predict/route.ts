@@ -3,7 +3,7 @@ import { fetchPrediction } from '@/lib/api'
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { zipcode, bedrooms } = body as { zipcode?: string; bedrooms?: number }
+    const { zipcode, bedrooms, bathrooms } = body as { zipcode?: string; bedrooms?: number; bathrooms?: number }
 
     if (!zipcode || !/^\d{5}$/.test(zipcode)) {
       return Response.json({ error: 'zipcode must be a 5-digit string' }, { status: 400 })
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'bedrooms must be 2, 3, 4, or 5' }, { status: 400 })
     }
 
-    const result = await fetchPrediction(zipcode, bedrooms)
+    const result = await fetchPrediction(zipcode, bedrooms, bathrooms ?? 2)
     return Response.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

@@ -39,6 +39,21 @@ DATA_DIR  = "/mnt/real-estate-data/data"
 
 BEDROOM_COL = {2: "zhvi_2br", 3: "zhvi_3br", 4: "zhvi_4br", 5: "zhvi_5br_plus"}
 
+# NAHB-derived bathroom multipliers relative to 2-bath baseline (1.0).
+# Source: NAHB House Price Estimator (American Housing Survey, Census/HUD).
+# Keys: (bedrooms, bathrooms) → multiplier
+BATHROOM_MULTIPLIER: dict[tuple[int, int], float] = {
+    (2, 1): 0.81, (2, 2): 1.00, (2, 3): 1.21, (2, 4): 1.45,
+    (3, 1): 0.81, (3, 2): 1.00, (3, 3): 1.21, (3, 4): 1.45,
+    (4, 1): 0.80, (4, 2): 1.00, (4, 3): 1.22, (4, 4): 1.46,
+    (5, 1): 0.80, (5, 2): 1.00, (5, 3): 1.22, (5, 4): 1.46,
+}
+
+
+def _bath_multiplier(bedrooms: int, bathrooms: int) -> float:
+    return BATHROOM_MULTIPLIER.get((bedrooms, bathrooms), 1.0)
+
+
 # ---------------------------------------------------------------------------
 # Startup: load models + data once, keep in memory
 # ---------------------------------------------------------------------------
@@ -46,31 +61,37 @@ _state: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # XGBoost regressors (1m, 3m, 6m)
-    _state["xgb_models"] = {
-        h: joblib.load(f"{MODEL_DIR}/xgboost_{h}.pkl")
-        for h in ("1m", "3m", "6m")
-    }
+    import traceback as _tb
+    try:
+        # XGBoost regressors (1m, 3m, 6m)
+        _state["xgb_models"] = {
+            h: joblib.load(f"{MODEL_DIR}/xgboost_{h}.pkl")
+            for h in ("1m", "3m", "6m")
+        }
 
-    # Latest data snapshot (one row per zipcode — used by /predict)
-    _state["latest"] = joblib.load(f"{MODEL_DIR}/latest_data.pkl")
+        # Latest data snapshot (one row per zipcode — used by /predict)
+        _state["latest"] = joblib.load(f"{MODEL_DIR}/latest_data.pkl")
 
-    # Full history (used by /history)
-    _state["history_df"] = pd.read_csv(f"{DATA_DIR}/dallas_clean.csv")
-    _state["history_df"]["Date"] = pd.to_datetime(_state["history_df"]["Date"])
+        # Full history (used by /history)
+        _state["history_df"] = pd.read_csv(f"{DATA_DIR}/dallas_clean.csv")
+        _state["history_df"]["Date"] = pd.to_datetime(_state["history_df"]["Date"])
 
-    # Precompute per-zipcode volatility for /zipcode-profile
-    hist = _state["history_df"]
-    vol_map = {}
-    for zc, grp in hist.groupby("ZipCode"):
-        grp_sorted = grp.sort_values("Date")
-        pct_changes = grp_sorted["ZHVI"].pct_change().dropna()
-        vol_map[int(zc)] = float(pct_changes.std()) if len(pct_changes) > 1 else 0.0
-    _state["volatility_by_zipcode"] = vol_map
+        # Precompute per-zipcode volatility for /zipcode-profile
+        hist = _state["history_df"]
+        vol_map = {}
+        for zc, grp in hist.groupby("ZipCode"):
+            grp_sorted = grp.sort_values("Date")
+            pct_changes = grp_sorted["ZHVI"].pct_change().dropna()
+            vol_map[int(zc)] = float(pct_changes.std()) if len(pct_changes) > 1 else 0.0
+        _state["volatility_by_zipcode"] = vol_map
 
-    print("Models and data loaded.")
-    print(f"  XGBoost:  1m, 3m, 6m")
-    print(f"  Zipcodes: {len(_state['latest'])}")
+        print("Models and data loaded.")
+        print(f"  XGBoost:  1m, 3m, 6m")
+        print(f"  Zipcodes: {len(_state['latest'])}")
+    except Exception as exc:
+        print(f"LIFESPAN ERROR: {exc}")
+        _tb.print_exc()
+        raise
     yield
     _state.clear()
 
@@ -89,6 +110,7 @@ app.add_middleware(
 class PredictRequest(BaseModel):
     zipcode: str
     bedrooms: Literal[2, 3, 4, 5]
+    bathrooms: Literal[1, 2, 3, 4] = 2
 
     @field_validator("zipcode")
     @classmethod
@@ -123,19 +145,22 @@ class PredictResponse(BaseModel):
     zipcode: str
     city: str
     bedrooms: int
+    bathrooms: int
     current_price: float
     forecasts: list[HorizonResult]
     direction_1m: DirectionResult
     direction_explanation: DirectionExplanation
-    data_date: str         # date of the latest data point (YYYY-MM-DD)
-    forecast_date_1m: str  # 1 month after data_date
-    forecast_date_3m: str  # 3 months after data_date
-    forecast_date_6m: str  # 6 months after data_date
+    data_date: str              # date of the latest data point (YYYY-MM-DD)
+    forecast_date_1m: str       # 1 month after data_date
+    forecast_date_3m: str       # 3 months after data_date
+    forecast_date_6m: str       # 6 months after data_date
+    current_mortgage_rate: float | None = None  # 30-year fixed rate at data_date
 
 
 class HistoryRequest(BaseModel):
     zipcode: str
     bedrooms: Literal[2, 3, 4, 5]
+    bathrooms: Literal[1, 2, 3, 4] = 2
 
     @field_validator("zipcode")
     @classmethod
@@ -153,6 +178,7 @@ class HistoryPoint(BaseModel):
 class HistoryResponse(BaseModel):
     zipcode: str
     bedrooms: int
+    bathrooms: int
     data: list[HistoryPoint]
 
 
@@ -176,8 +202,11 @@ def _predict_bedroom_price(
     row: pd.Series,
     horizon: str,
     br_col: str,
+    bedrooms: int = 3,
+    bathrooms: int = 2,
 ) -> float:
-    """Use XGBoost to predict ZHVI, then scale to the bedroom tier."""
+    """Use XGBoost to predict ZHVI, then scale to the bedroom tier and
+    apply the NAHB-derived bathroom multiplier."""
     art = _state["xgb_models"][horizon]
     features = art["features"]
     X = row[features].values.reshape(1, -1)
@@ -186,9 +215,9 @@ def _predict_bedroom_price(
     current_zhvi = float(row["ZHVI"])
     current_br   = float(row[br_col])
     if current_zhvi == 0:
-        return pred_zhvi
+        return pred_zhvi * _bath_multiplier(bedrooms, bathrooms)
     br_ratio = current_br / current_zhvi
-    return pred_zhvi * br_ratio
+    return pred_zhvi * br_ratio * _bath_multiplier(bedrooms, bathrooms)
 
 
 def _get_data_date() -> pd.Timestamp:
@@ -256,14 +285,15 @@ def _forecast_date(base: pd.Timestamp, months: int) -> str:
 def predict(req: PredictRequest):
     row    = _get_zipcode_row(req.zipcode)
     br_col = BEDROOM_COL[req.bedrooms]
+    bath_mult = _bath_multiplier(req.bedrooms, req.bathrooms)
 
-    current_price = float(row[br_col])
+    current_price = float(row[br_col]) * bath_mult
     city          = str(row.get("City", "Unknown"))
 
     # XGBoost forecasts (1m, 3m, 6m)
     forecasts: list[HorizonResult] = []
     for horizon in ("1m", "3m", "6m"):
-        pred_price     = _predict_bedroom_price(row, horizon, br_col)
+        pred_price     = _predict_bedroom_price(row, horizon, br_col, req.bedrooms, req.bathrooms)
         change_dollars = pred_price - current_price
         change_pct     = (change_dollars / current_price * 100) if current_price else 0.0
         forecasts.append(HorizonResult(
@@ -297,10 +327,14 @@ def predict(req: PredictRequest):
 
     data_date = _get_data_date()
 
+    mortgage_rate = row.get("mortgage_rate_30y")
+    mortgage_rate = round(float(mortgage_rate), 2) if mortgage_rate is not None and not pd.isna(mortgage_rate) else None
+
     return PredictResponse(
         zipcode=req.zipcode,
         city=city,
         bedrooms=req.bedrooms,
+        bathrooms=req.bathrooms,
         current_price=round(current_price, 2),
         forecasts=forecasts,
         direction_1m=direction_1m,
@@ -309,6 +343,7 @@ def predict(req: PredictRequest):
         forecast_date_1m=_forecast_date(data_date, 1),
         forecast_date_3m=_forecast_date(data_date, 3),
         forecast_date_6m=_forecast_date(data_date, 6),
+        current_mortgage_rate=mortgage_rate,
     )
 
 
@@ -319,6 +354,7 @@ def predict(req: PredictRequest):
 def history(req: HistoryRequest):
     df     = _state["history_df"]
     br_col = BEDROOM_COL[req.bedrooms]
+    bath_mult = _bath_multiplier(req.bedrooms, req.bathrooms)
 
     filtered = df[df["ZipCode"] == int(req.zipcode)][["Date", br_col]].dropna()
     if filtered.empty:
@@ -326,11 +362,11 @@ def history(req: HistoryRequest):
 
     filtered = filtered[filtered["Date"] >= "2019-01-01"].sort_values("Date")
     data = [
-        HistoryPoint(date=row["Date"].strftime("%Y-%m-%d"), zhvi=round(float(row[br_col]), 2))
+        HistoryPoint(date=row["Date"].strftime("%Y-%m-%d"), zhvi=round(float(row[br_col]) * bath_mult, 2))
         for _, row in filtered.iterrows()
     ]
 
-    return HistoryResponse(zipcode=req.zipcode, bedrooms=req.bedrooms, data=data)
+    return HistoryResponse(zipcode=req.zipcode, bedrooms=req.bedrooms, bathrooms=req.bathrooms, data=data)
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +423,7 @@ def model_info():
         "month": "Seasonal Patterns",
         "year": "Long-Term Trend",
         "SizeRank": "Market Size",
+        "mortgage_rate_30y": "30-Year Mortgage Rate",
     }
 
     art = _state["xgb_models"]["1m"]
@@ -446,6 +483,7 @@ FEATURE_LABELS = {
     "month": "Seasonal Patterns",
     "year": "Long-Term Trend",
     "SizeRank": "Market Size",
+    "mortgage_rate_30y": "30-Year Mortgage Rate",
 }
 
 
@@ -473,6 +511,7 @@ def backtest(req: PredictRequest):
     """Run 1m model on past months and compare predictions to actuals."""
     df = _state["history_df"]
     br_col = BEDROOM_COL[req.bedrooms]
+    bath_mult = _bath_multiplier(req.bedrooms, req.bathrooms)
     art = _state["xgb_models"]["1m"]
     features = art["features"]
 
@@ -494,16 +533,16 @@ def backtest(req: PredictRequest):
         X = row[features].values.reshape(1, -1)
         pred_zhvi = float(art["model"].predict(X)[0])
 
-        # Scale to bedroom tier
+        # Scale to bedroom tier then apply bathroom multiplier
         current_zhvi = float(row["ZHVI"])
         current_br = float(row[br_col])
         if current_zhvi > 0:
             br_ratio = current_br / current_zhvi
-            pred_price = pred_zhvi * br_ratio
+            pred_price = pred_zhvi * br_ratio * bath_mult
         else:
-            pred_price = pred_zhvi
+            pred_price = pred_zhvi * bath_mult
 
-        actual_price = float(actual_next[br_col])
+        actual_price = float(actual_next[br_col]) * bath_mult
         error_dollars = abs(pred_price - actual_price)
         error_pct = (error_dollars / actual_price * 100) if actual_price > 0 else 0.0
 
@@ -520,6 +559,7 @@ def backtest(req: PredictRequest):
     return {
         "zipcode": req.zipcode,
         "bedrooms": req.bedrooms,
+        "bathrooms": req.bathrooms,
         "data": results,
         "avg_error_dollars": round(float(avg_error_dollars), 2),
         "avg_error_pct": round(float(avg_error_pct), 2),
@@ -577,6 +617,7 @@ def zipcode_profile(req: PredictRequest):
 
     return {
         "zipcode": req.zipcode,
+        "bathrooms": req.bathrooms,
         "volatility_percentile": percentile,
         "predictability_label": label,
         "seasonal": seasonal,
@@ -587,20 +628,21 @@ def zipcode_profile(req: PredictRequest):
 # GET /model-deep-dive — XGBoost algorithm details for the deep-dive UI
 # ---------------------------------------------------------------------------
 FEATURE_CATEGORIES = {
-    "zhvi_lag_1m":      "price_history",
-    "zhvi_lag_3m":      "price_history",
-    "zhvi_lag_6m":      "price_history",
-    "zhvi_lag_12m":     "price_history",
-    "price_change_12m": "momentum",
-    "zhvi_2br":         "market_segment",
-    "zhvi_3br":         "market_segment",
-    "zhvi_4br":         "market_segment",
-    "zhvi_5br_plus":    "market_segment",
-    "zhvi_top_tier":    "market_segment",
-    "zhvi_bottom_tier": "market_segment",
-    "month":            "context",
-    "year":             "context",
-    "SizeRank":         "context",
+    "zhvi_lag_1m":        "price_history",
+    "zhvi_lag_3m":        "price_history",
+    "zhvi_lag_6m":        "price_history",
+    "zhvi_lag_12m":       "price_history",
+    "price_change_12m":   "momentum",
+    "zhvi_2br":           "market_segment",
+    "zhvi_3br":           "market_segment",
+    "zhvi_4br":           "market_segment",
+    "zhvi_5br_plus":      "market_segment",
+    "zhvi_top_tier":      "market_segment",
+    "zhvi_bottom_tier":   "market_segment",
+    "month":              "context",
+    "year":               "context",
+    "SizeRank":           "context",
+    "mortgage_rate_30y":  "economic",
 }
 
 HYPERPARAMETER_DESCRIPTIONS = {
@@ -675,6 +717,7 @@ def model_deep_dive():
             "Extract 14 market features: price lags, bedroom tiers, momentum, and seasonal context",
             "Feed features into the trained XGBoost model to predict future overall ZHVI",
             "Scale the ZHVI prediction to the selected bedroom tier using current price ratios",
+            "Apply NAHB-derived bathroom multiplier to adjust for the selected bathroom count",
             "Derive direction signal, confidence score, and expected price range from the forecast",
         ],
     }

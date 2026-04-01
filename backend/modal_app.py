@@ -10,7 +10,7 @@ backend_dir = pathlib.Path(__file__).parent
 image = (
     modal.Image.debian_slim()
     .pip_install(
-        'fastapi', 'pandas', 'scikit-learn', 'xgboost',
+        'fastapi', 'pandas', 'pyarrow', 'scikit-learn', 'xgboost==1.7.6',
         'joblib', 'numpy',
     )
     .add_local_dir(backend_dir, remote_path="/root/backend")

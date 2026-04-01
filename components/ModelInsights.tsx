@@ -37,6 +37,8 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
     'The calendar year, which captures macro-level trends like post-pandemic price surges, interest rate shifts, and long-term appreciation.',
   'Market Size':
     'A ranking of this zipcode by number of homes. Larger markets tend to be more stable and predictable; smaller ones can be more volatile.',
+  '30-Year Mortgage Rate':
+    'The prevailing 30-year fixed mortgage rate at the time of the data snapshot (from the Freddie Mac Primary Mortgage Market Survey via FRED). Higher rates reduce buyer purchasing power and tend to dampen price growth; lower rates fuel demand and push prices up. This feature has the most influence on 3- and 6-month forecasts, where rate changes have had time to flow through to closed sales.',
 }
 
 const HORIZON_LABELS: Record<string, string> = {
@@ -195,7 +197,7 @@ export default function ModelInsights({ info, detailedInfo }: Props) {
       </div>
 
       <p className="text-[11px] text-gray-400">
-        Predictions powered by XGBoost, trained on Zillow Home Value Index data through {endDate}.
+        Predictions powered by XGBoost, trained on Zillow Home Value Index and Freddie Mac mortgage rate data through {endDate}.
       </p>
     </div>
   )

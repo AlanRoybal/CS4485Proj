@@ -55,14 +55,18 @@ ZHVI_URLS = {
 # Dallas-Fort Worth metro — filter CSVs to this metro area
 DALLAS_METRO = "Dallas-Fort Worth-Arlington, TX"
 
-# Columns the model expects
+# Columns the model expects (16 leakage-free features)
 FEATURES = [
     "zhvi_lag_1m", "zhvi_lag_3m", "zhvi_lag_6m", "zhvi_lag_12m",
     "price_change_12m",
     "zhvi_2br", "zhvi_3br", "zhvi_4br", "zhvi_5br_plus",
     "zhvi_top_tier", "zhvi_bottom_tier",
     "month", "year", "SizeRank",
+    "mortgage_rate_30y",
 ]
+
+# FRED — 30-year fixed mortgage rate
+FRED_MORTGAGE_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US"
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +125,35 @@ def download_and_melt(url: str, value_name: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Step 1b: Download FRED 30-year mortgage rate data
+# ---------------------------------------------------------------------------
+def download_fred_mortgage_rates() -> pd.DataFrame:
+    """Download MORTGAGE30US from FRED and resample weekly data to monthly means."""
+    if requests is None:
+        raise ImportError("requests is required — pip install requests")
+
+    print("  Downloading mortgage rates (FRED MORTGAGE30US)...")
+    resp = requests.get(FRED_MORTGAGE_URL, timeout=120)
+    resp.raise_for_status()
+
+    fred = pd.read_csv(io.StringIO(resp.text))
+    # Defensive check: ensure expected column exists
+    if "MORTGAGE30US" not in fred.columns:
+        raise ValueError(f"Unexpected FRED CSV columns: {fred.columns.tolist()}")
+
+    # FRED uses 'observation_date' as the date column name
+    date_col = "observation_date" if "observation_date" in fred.columns else fred.columns[0]
+    fred = fred.rename(columns={date_col: "Date", "MORTGAGE30US": "mortgage_rate_30y"})
+    fred["Date"] = pd.to_datetime(fred["Date"])
+    fred["mortgage_rate_30y"] = pd.to_numeric(fred["mortgage_rate_30y"], errors="coerce")
+
+    # Resample weekly → monthly means (end-of-month dates to match Zillow)
+    fred = fred.set_index("Date").resample("ME").mean().reset_index()
+    print(f"    {len(fred)} monthly observations, {fred['Date'].min().date()} → {fred['Date'].max().date()}")
+    return fred[["Date", "mortgage_rate_30y"]]
+
+
+# ---------------------------------------------------------------------------
 # Step 2: Merge all CSVs into one long-format DataFrame
 # ---------------------------------------------------------------------------
 def download_and_merge() -> pd.DataFrame:
@@ -154,6 +187,15 @@ def download_and_merge() -> pd.DataFrame:
 
     print(f"  Merged: {len(base_df):,} rows, {base_df['ZipCode'].nunique()} zipcodes")
     print(f"  Date range: {base_df['Date'].min().date()} → {base_df['Date'].max().date()}")
+
+    # Merge FRED mortgage rate data
+    fred_df = download_fred_mortgage_rates()
+    base_df = base_df.merge(fred_df, on="Date", how="left")
+    base_df["mortgage_rate_30y"] = base_df["mortgage_rate_30y"].ffill().bfill()
+    missing = base_df["mortgage_rate_30y"].isna().sum()
+    if missing > 0:
+        print(f"  WARNING: {missing} rows still missing mortgage_rate_30y after ffill/bfill")
+
     return base_df
 
 
@@ -177,7 +219,9 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df["price_change_12m"] = df["ZHVI"] - df["zhvi_lag_12m"]
 
     # Temporal features
-    df["month"] = df["Date"].dt.month
+    df["month"] = df["Date"].dt.month  # kept for /zipcode-profile calendar grouping
+    df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+    df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
     df["year"] = df["Date"].dt.year
 
     # Targets (1-month forward)
@@ -212,13 +256,22 @@ def build_latest_snapshot(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Step 5: Save everything
 # ---------------------------------------------------------------------------
-def save_outputs(df: pd.DataFrame, latest: pd.DataFrame):
-    """Save updated CSV and latest_data.pkl."""
+def save_outputs(df: pd.DataFrame, latest: pd.DataFrame, split_date: str = "2025-01-01"):
+    """Save updated CSV, train/test splits, and latest_data.pkl."""
     print("\n=== Step 4: Saving outputs ===")
 
     csv_path = os.path.join(DATA_DIR, "dallas_clean.csv")
     df.to_csv(csv_path, index=False)
     print(f"  dallas_clean.csv → {csv_path} ({len(df):,} rows)")
+
+    # Regenerate train/test splits so logistic regression uses updated features
+    cutoff = pd.Timestamp(split_date)
+    train_df = df[df["Date"] < cutoff]
+    test_df  = df[df["Date"] >= cutoff]
+    train_df.to_csv(os.path.join(DATA_DIR, "train.csv"), index=False)
+    test_df.to_csv(os.path.join(DATA_DIR, "test.csv"), index=False)
+    print(f"  train.csv → {len(train_df):,} rows (before {split_date})")
+    print(f"  test.csv  → {len(test_df):,} rows ({split_date} onward)")
 
     if joblib is not None:
         pkl_path = os.path.join(MODEL_DIR, "latest_data.pkl")

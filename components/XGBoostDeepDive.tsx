@@ -27,6 +27,10 @@ const CATEGORY_META: Record<string, { label: string; description: string }> = {
     label: 'Context',
     description: 'Temporal and geographic signals like seasonality, long-term trends, and market size',
   },
+  economic: {
+    label: 'Economic',
+    description: 'Macroeconomic data — the 30-year fixed mortgage rate from the Freddie Mac Primary Mortgage Market Survey (via FRED)',
+  },
 }
 
 const HORIZON_LABELS: Record<string, string> = {
@@ -172,12 +176,13 @@ export default function XGBoostDeepDive({ metrics, info, deepDive }: Props) {
     {
       key: 'features',
       icon: Grid3X3,
-      title: 'The 14 Features',
+      title: 'The 15 Features',
       content: deepDive ? (
         <div className="space-y-4">
           <p>
-            Every prediction uses exactly 14 data points about a zipcode. These features
-            are grouped into four categories:
+            Every prediction uses exactly 15 data points — 14 from Zillow home value data
+            and 1 from the Freddie Mac mortgage rate survey. These features are grouped into
+            five categories:
           </p>
 
           {/* Group features by category */}
@@ -209,8 +214,9 @@ export default function XGBoostDeepDive({ metrics, info, deepDive }: Props) {
 
           <p className="text-[11px] text-gray-400">
             Two features (1-month and 3-month price changes) were removed during development
-            because they encoded the target variable — a form of data leakage. The remaining 14
-            are verified clean predictors.
+            because they encoded the target variable — a form of data leakage. The remaining 15
+            features are verified clean predictors. The mortgage rate was added after confirming
+            it improved accuracy on all three forecast horizons.
           </p>
         </div>
       ) : (
@@ -231,7 +237,8 @@ export default function XGBoostDeepDive({ metrics, info, deepDive }: Props) {
           <div className="space-y-0">
             {(deepDive?.prediction_steps ?? [
               'Collect the latest Zillow ZHVI data for the selected zipcode',
-              'Extract 14 market features: price lags, bedroom tiers, momentum, and seasonal context',
+              'Fetch the current 30-year mortgage rate from the Freddie Mac survey (via FRED)',
+              'Extract 15 market features: price lags, bedroom tiers, momentum, seasonal context, and mortgage rate',
               'Feed features into the trained XGBoost model to predict future overall ZHVI',
               'Scale the ZHVI prediction to the selected bedroom tier using current price ratios',
               'Derive direction signal, confidence score, and expected price range from the forecast',
@@ -314,8 +321,9 @@ export default function XGBoostDeepDive({ metrics, info, deepDive }: Props) {
             })}
           </div>
           <p className="text-[11px] text-gray-400 mt-1">
-            Each model was trained on the same 14 features but optimized for its specific
-            target — the actual home value 1, 3, or 6 months into the future.
+            Each model was trained on the same 15 features but optimized for its specific
+            target — the actual home value 1, 3, or 6 months into the future. Adding the
+            mortgage rate improved all three horizons, with the largest gain on the 3-month forecast.
           </p>
         </div>
       ),
@@ -371,12 +379,13 @@ export default function XGBoostDeepDive({ metrics, info, deepDive }: Props) {
               <li>
                 <span className="font-medium">Leakage investigation</span> — we removed 2 features
                 (1-month and 3-month price changes) that were essentially encoding the
-                answer. The remaining 14 features were verified to be clean predictors.
+                answer. The remaining 15 features were verified to be clean predictors.
               </li>
               <li>
-                <span className="font-medium">Data source</span> — Zillow Home Value Index (ZHVI),
-                which represents the typical home value for a given area. It&apos;s smoothed
-                and seasonally adjusted by Zillow.
+                <span className="font-medium">Data sources</span> — Zillow Home Value Index (ZHVI)
+                for price history, smoothed and seasonally adjusted by Zillow; plus the
+                Freddie Mac Primary Mortgage Market Survey (weekly, via FRED) resampled to
+                monthly averages.
               </li>
               <li>
                 <span className="font-medium">Early stopping</span> — training halts automatically

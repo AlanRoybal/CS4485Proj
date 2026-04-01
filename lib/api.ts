@@ -20,6 +20,7 @@ interface ModalPredictResponse {
   zipcode: string
   city: string
   bedrooms: number
+  bathrooms: number
   current_price: number
   forecasts: ModalHorizonResult[]
   direction_1m: { direction: 'up' | 'down'; confidence: number }
@@ -28,28 +29,32 @@ interface ModalPredictResponse {
   forecast_date_1m: string
   forecast_date_3m: string
   forecast_date_6m: string
+  current_mortgage_rate?: number
 }
 
 interface ModalHistoryResponse {
   zipcode: string
   bedrooms: number
+  bathrooms: number
   data: HistoryPoint[]
 }
 
 function getBackendUrl(): string {
-  const url = process.env.MODAL_BACKEND_URL
+  const url = process.env.MODAL_BACKEND_URL?.trim()
   if (!url) throw new Error('MODAL_BACKEND_URL is not configured')
-  return url
+  // Avoid `//predict` when Vercel/env has a trailing slash (many UIs add one).
+  return url.replace(/\/+$/, '')
 }
 
 export async function fetchPrediction(
   zipcode: string,
   bedrooms: number,
+  bathrooms: number = 2,
 ): Promise<PredictionResult & { city: string }> {
   const res = await fetch(`${getBackendUrl()}/predict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ zipcode, bedrooms }),
+    body: JSON.stringify({ zipcode, bedrooms, bathrooms }),
     cache: 'no-store',
   })
 
@@ -74,6 +79,7 @@ export async function fetchPrediction(
   return {
     zipcode: data.zipcode,
     bedrooms: data.bedrooms,
+    bathrooms: data.bathrooms,
     current_price: data.current_price,
     predicted_price: forecast1m.predicted_price,
     predicted_change_dollars: forecast1m.predicted_change_dollars,
@@ -92,17 +98,19 @@ export async function fetchPrediction(
       forecast_date: dateMap[f.horizon] ?? data.forecast_date_1m,
     })),
     direction_explanation: data.direction_explanation,
+    current_mortgage_rate: data.current_mortgage_rate,
   }
 }
 
 export async function fetchHistory(
   zipcode: string,
   bedrooms: number,
+  bathrooms: number = 2,
 ): Promise<HistoryPoint[]> {
   const res = await fetch(`${getBackendUrl()}/history`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ zipcode, bedrooms }),
+    body: JSON.stringify({ zipcode, bedrooms, bathrooms }),
     cache: 'no-store',
   })
 
@@ -167,12 +175,13 @@ export interface BacktestResult {
 export async function fetchBacktest(
   zipcode: string,
   bedrooms: number,
+  bathrooms: number = 2,
 ): Promise<BacktestResult | null> {
   try {
     const res = await fetch(`${getBackendUrl()}/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zipcode, bedrooms }),
+      body: JSON.stringify({ zipcode, bedrooms, bathrooms }),
       cache: 'no-store',
     })
     if (!res.ok) return null
@@ -198,12 +207,13 @@ export interface ZipcodeProfileResult {
 export async function fetchZipcodeProfile(
   zipcode: string,
   bedrooms: number,
+  bathrooms: number = 2,
 ): Promise<ZipcodeProfileResult | null> {
   try {
     const res = await fetch(`${getBackendUrl()}/zipcode-profile`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zipcode, bedrooms }),
+      body: JSON.stringify({ zipcode, bedrooms, bathrooms }),
       cache: 'no-store',
     })
     if (!res.ok) return null
@@ -264,6 +274,7 @@ export async function fetchModelDeepDive(): Promise<XGBoostDeepDiveInfo | null> 
 // ---------------------------------------------------------------------------
 export async function fetchBedroomPrices(
   zipcode: string,
+  bathrooms: number = 2,
 ): Promise<{ prices: BedroomPrices; city: string }> {
   const tiers = [2, 3, 4, 5] as const
   const results = await Promise.all(
@@ -271,7 +282,7 @@ export async function fetchBedroomPrices(
       const res = await fetch(`${getBackendUrl()}/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zipcode, bedrooms: br }),
+        body: JSON.stringify({ zipcode, bedrooms: br, bathrooms }),
         cache: 'no-store',
       })
       if (!res.ok) return null
