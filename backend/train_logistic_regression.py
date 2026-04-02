@@ -41,10 +41,12 @@ TEST_PATH  = f"{DATA_DIR}/test.csv"
 SAVE_PATH  = f"{MODEL_DIR}/logistic_regression.pkl"
 
 # ── Feature definition ──────────────────────────────────────────────────
-# 14 leakage-free features.
+# 16 leakage-free features.
 # REMOVED: price_change_1m  (88.75% target match — direct leakage)
 # REMOVED: price_change_3m  (94.3% correlated with 1m — indirect leakage)
 # REMOVED: zhvi_1br          (87.6% missing — not usable)
+# CHANGED: month → month_sin + month_cos (cyclical encoding, fixes Dec/Jan discontinuity)
+# ADDED:   mortgage_rate_30y (FRED MORTGAGE30US, economic context)
 FEATURE_COLS = [
     # Lag features — historical ZHVI snapshots
     "zhvi_lag_1m",
@@ -66,6 +68,8 @@ FEATURE_COLS = [
     "year",
     # Geographic
     "SizeRank",
+    # Economic context
+    "mortgage_rate_30y",
 ]
 
 TARGET = "target_direction_1m"

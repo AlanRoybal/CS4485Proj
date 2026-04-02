@@ -84,6 +84,6 @@ describe('LAND-04: Navigation on valid submit', () => {
     await user.type(input, '75252')
     const submitBtn = screen.getByRole('button', { name: /analyze market/i })
     await user.click(submitBtn)
-    expect(mockPush).toHaveBeenCalledWith('/dashboard/75252?bedrooms=3')
+    expect(mockPush).toHaveBeenCalledWith('/dashboard/75252?bedrooms=3&bathrooms=2')
   })
 })

@@ -34,6 +34,13 @@ const BEDROOM_OPTIONS = [
   { label: "5+", value: 5 },
 ];
 
+const BATHROOM_OPTIONS = [
+  { label: "1", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4+", value: 4 },
+];
+
 interface SearchFormProps {
   /** Called when a valid 5-digit zipcode is typed (for map integration) */
   onZipcodeChange?: (zipcode: string | null) => void;
@@ -43,6 +50,7 @@ export default function SearchForm({ onZipcodeChange }: SearchFormProps = {}) {
   const router = useRouter();
   const [zipcode, setZipcode] = useState("");
   const [bedrooms, setBedrooms] = useState(3);
+  const [bathrooms, setBathrooms] = useState(2);
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -87,7 +95,7 @@ export default function SearchForm({ onZipcodeChange }: SearchFormProps = {}) {
 
     setError("");
     setLoading(true);
-    const url = `/dashboard/${trimmed}?bedrooms=${bedrooms}`;
+    const url = `/dashboard/${trimmed}?bedrooms=${bedrooms}&bathrooms=${bathrooms}`;
     if (document.startViewTransition) {
       document.startViewTransition(async () => {
         router.push(url);
@@ -166,6 +174,39 @@ export default function SearchForm({ onZipcodeChange }: SearchFormProps = {}) {
                 focus:outline-none focus:ring-2 focus:ring-teal-600/40
                 ${
                   bedrooms === opt.value
+                    ? "bg-teal-800 text-white shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }
+              `}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bathrooms */}
+      <div>
+        <p className="text-[11px] font-semibold tracking-[0.15em] uppercase text-gray-400 mb-3">
+          Bathrooms
+        </p>
+        <div
+          className="grid grid-cols-4 gap-2"
+          role="group"
+          aria-label="Select bathroom count"
+        >
+          {BATHROOM_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setBathrooms(opt.value)}
+              disabled={loading}
+              aria-pressed={bathrooms === opt.value}
+              className={`
+                py-2.5 rounded text-sm font-semibold transition-all duration-150 cursor-pointer
+                focus:outline-none focus:ring-2 focus:ring-teal-600/40
+                ${
+                  bathrooms === opt.value
                     ? "bg-teal-800 text-white shadow-sm"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }

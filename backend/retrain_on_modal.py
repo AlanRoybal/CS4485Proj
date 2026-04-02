@@ -27,6 +27,7 @@ FEATURES = [
     "zhvi_2br", "zhvi_3br", "zhvi_4br", "zhvi_5br_plus",
     "zhvi_top_tier", "zhvi_bottom_tier",
     "month", "year", "SizeRank",
+    "mortgage_rate_30y",
 ]
 
 BEDROOM_COL = {2: "zhvi_2br", 3: "zhvi_3br", 4: "zhvi_4br", 5: "zhvi_5br_plus"}

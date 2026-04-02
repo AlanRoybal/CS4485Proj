@@ -26,6 +26,7 @@ export interface DirectionExplanation {
 export interface PredictionResult {
   zipcode: string
   bedrooms: number
+  bathrooms: number
   predicted_price: number
   direction: 'up' | 'down'
   confidence: number          // 0–1
@@ -36,6 +37,7 @@ export interface PredictionResult {
   forecast_date?: string      // YYYY-MM-DD — 1-month forecast target date
   forecasts: ForecastHorizon[]  // all horizons (1m, 3m, 6m)
   direction_explanation?: DirectionExplanation
+  current_mortgage_rate?: number  // 30-year fixed rate at data_date (%)
 }
 
 export interface BedroomPrices {

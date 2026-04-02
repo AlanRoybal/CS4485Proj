@@ -19,13 +19,13 @@ export default function PredictionPipeline({ info, predictedPrice, mape }: Props
   const steps = [
     {
       icon: Database,
-      label: 'Zillow Data',
+      label: 'Zillow + FRED',
       detail: `${(info.dataset.data_points / 1000).toFixed(0)}k+ data points`,
     },
     {
       icon: BarChart3,
-      label: '14 Market Features',
-      detail: 'Price lags, tiers, trends',
+      label: '15 Market Features',
+      detail: 'Price lags, tiers, mortgage rates',
     },
     {
       icon: Cpu,
