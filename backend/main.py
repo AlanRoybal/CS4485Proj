@@ -18,8 +18,14 @@ Volume layout (real-estate-data):
   /models/xgboost_3m.pkl
   /models/xgboost_6m.pkl
   /models/latest_data.pkl
+
+Logging:
+  Set LOG_LEVEL=DEBUG|INFO|WARNING|ERROR (default INFO). Request timing and IDs in logs.
 """
+import logging
 import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Literal
@@ -27,9 +33,53 @@ from typing import Literal
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, _LOG_LEVEL, logging.INFO),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+logger = logging.getLogger("real_estate_predictor")
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Log each request with a short ID, duration, and status for debugging."""
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        request.state.request_id = request_id
+        client = request.client.host if request.client else "?"
+        logger.info(
+            "request_start id=%s %s %s client=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            client,
+        )
+        start = time.perf_counter()
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "request_done id=%s %s %s status=%s duration_ms=%.2f",
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 # ---------------------------------------------------------------------------
 # Paths (Modal Volume)
@@ -61,7 +111,6 @@ _state: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import traceback as _tb
     try:
         # XGBoost regressors (1m, 3m, 6m)
         _state["xgb_models"] = {
@@ -85,12 +134,12 @@ async def lifespan(app: FastAPI):
             vol_map[int(zc)] = float(pct_changes.std()) if len(pct_changes) > 1 else 0.0
         _state["volatility_by_zipcode"] = vol_map
 
-        print("Models and data loaded.")
-        print(f"  XGBoost:  1m, 3m, 6m")
-        print(f"  Zipcodes: {len(_state['latest'])}")
-    except Exception as exc:
-        print(f"LIFESPAN ERROR: {exc}")
-        _tb.print_exc()
+        logger.info(
+            "startup_ok xgb_horizons=1m,3m,6m zipcodes=%s",
+            len(_state["latest"]),
+        )
+    except Exception:
+        logger.exception("startup_failed loading models or data from volume")
         raise
     yield
     _state.clear()
@@ -103,6 +152,67 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    req_id = getattr(request.state, "request_id", None)
+    if exc.status_code == 404:
+        logger.info(
+            "http_404 id=%s method=%s path=%s detail=%s",
+            req_id,
+            request.method,
+            request.url.path,
+            exc.detail,
+        )
+    elif exc.status_code < 500:
+        logger.warning(
+            "http_client_error id=%s status=%s method=%s path=%s detail=%s",
+            req_id,
+            exc.status_code,
+            request.method,
+            request.url.path,
+            exc.detail,
+        )
+    else:
+        logger.error(
+            "http_server_error id=%s status=%s method=%s path=%s detail=%s",
+            req_id,
+            exc.status_code,
+            request.method,
+            request.url.path,
+            exc.detail,
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    req_id = getattr(request.state, "request_id", None)
+    logger.warning(
+        "validation_error id=%s method=%s path=%s errors=%s",
+        req_id,
+        request.method,
+        request.url.path,
+        exc.errors(),
+    )
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    req_id = getattr(request.state, "request_id", None)
+    logger.exception(
+        "unhandled_error id=%s method=%s path=%s",
+        req_id,
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -330,6 +440,17 @@ def predict(req: PredictRequest):
     mortgage_rate = row.get("mortgage_rate_30y")
     mortgage_rate = round(float(mortgage_rate), 2) if mortgage_rate is not None and not pd.isna(mortgage_rate) else None
 
+    logger.debug(
+        "predict_ok zip=%s city=%s br=%s ba=%s current_price=%s data_date=%s mortgage_rate=%s",
+        req.zipcode,
+        city,
+        req.bedrooms,
+        req.bathrooms,
+        round(current_price, 2),
+        data_date.strftime("%Y-%m-%d"),
+        mortgage_rate,
+    )
+
     return PredictResponse(
         zipcode=req.zipcode,
         city=city,
@@ -365,6 +486,14 @@ def history(req: HistoryRequest):
         HistoryPoint(date=row["Date"].strftime("%Y-%m-%d"), zhvi=round(float(row[br_col]) * bath_mult, 2))
         for _, row in filtered.iterrows()
     ]
+
+    logger.debug(
+        "history_ok zip=%s br=%s ba=%s points=%s",
+        req.zipcode,
+        req.bedrooms,
+        req.bathrooms,
+        len(data),
+    )
 
     return HistoryResponse(zipcode=req.zipcode, bedrooms=req.bedrooms, bathrooms=req.bathrooms, data=data)
 
@@ -556,6 +685,15 @@ def backtest(req: PredictRequest):
     avg_error_dollars = np.mean([abs(r["predicted"] - r["actual"]) for r in results]) if results else 0
     avg_error_pct = np.mean([r["error_pct"] for r in results]) if results else 0
 
+    logger.debug(
+        "backtest_ok zip=%s br=%s ba=%s months=%s avg_err_pct=%s",
+        req.zipcode,
+        req.bedrooms,
+        req.bathrooms,
+        len(results),
+        round(float(avg_error_pct), 2),
+    )
+
     return {
         "zipcode": req.zipcode,
         "bedrooms": req.bedrooms,
@@ -614,6 +752,14 @@ def zipcode_profile(req: PredictRequest):
             "month": month_names[m - 1],
             "avg_change_pct": round(avg, 3),
         })
+
+    logger.debug(
+        "zipcode_profile_ok zip=%s br=%s vol_pct=%s label=%s",
+        req.zipcode,
+        req.bedrooms,
+        percentile,
+        label,
+    )
 
     return {
         "zipcode": req.zipcode,
