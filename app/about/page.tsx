@@ -1,11 +1,33 @@
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import {
+  fetchModelMetrics,
+  fetchModelInfo,
+  fetchModelInfoDetailed,
+  fetchModelDeepDive,
+} from "@/lib/api";
+import ModelAccuracy from "@/components/ModelAccuracy";
+import ModelInsights from "@/components/ModelInsights";
+import PredictionPipeline from "@/components/PredictionPipeline";
+import XGBoostDeepDive from "@/components/XGBoostDeepDive";
 
-export default function AboutPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AboutPage() {
+  const [modelMetrics, modelInfo, detailedModelInfo, deepDiveInfo] =
+    await Promise.all([
+      fetchModelMetrics().catch(
+        () => ({}) as Awaited<ReturnType<typeof fetchModelMetrics>>,
+      ),
+      fetchModelInfo().catch(() => null),
+      fetchModelInfoDetailed().catch(() => null),
+      fetchModelDeepDive().catch(() => null),
+    ]);
+
   return (
-    <main className="h-[calc(100dvh-56px)] bg-white overflow-hidden">
-      <div className="relative max-w-2xl mx-auto px-6 lg:px-6 h-full flex flex-col py-10">
-        {/* Back arrow — on small screens sits in its own row, on lg floats outside the column near "How It Works" */}
+    <main className="min-h-[calc(100dvh-56px)] bg-white">
+      <div className="relative max-w-2xl mx-auto px-6 lg:px-6 flex flex-col py-10">
+        {/* Back arrow */}
         <div className="lg:absolute lg:-left-20 lg:top-[5.75rem] mb-4 lg:mb-0">
           <Link
             href="/"
@@ -26,66 +48,78 @@ export default function AboutPage() {
         </div>
 
         {/* Title */}
-        <h1 className="font-serif text-3xl text-gray-950 mb-1">How It Works</h1>
         <p className="text-sm text-gray-400 mb-8">
-          UT Dallas UTDesign Capstone &mdash; Spring 2026 &mdash; Advisor: Muhammad Ikram
+          UT Dallas UTDesign Capstone &mdash; Spring 2026 &mdash; Advisor:
+          Muhammad Ikram
         </p>
 
-        {/* Content — single column */}
-        <div className="space-y-6">
-          <p className="text-lg text-gray-700 leading-relaxed">
-            Homecast helps homebuyers and sellers understand where Dallas-area home prices are heading
-            by combining historical Zillow data with machine learning forecasts.
-          </p>
-
-          <div>
-            <h2 className="text-sm font-serif text-gray-950 mb-3 pb-2 border-b border-gray-100">
-              Process
-            </h2>
-            <div className="space-y-2">
-              {[
-                'Enter a Dallas zipcode and bedroom count.',
-                'See 5 years of historical ZHVI data.',
-                'Receive a 1-month price prediction (XGBoost).',
-                'Get a directional confidence signal (Logistic Regression).',
-              ].map((step, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  <span className="text-sm font-semibold text-teal-800 mt-0.5 tabular-nums w-4 shrink-0">
-                    {i + 1}.
-                  </span>
-                  <span className="text-base text-gray-600">{step}</span>
-                </div>
-              ))}
+        {/* How We Predict */}
+        {modelInfo && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-px w-5 bg-teal-800" />
+              <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                How We Predict
+              </h2>
             </div>
-          </div>
+            <div className="bg-white rounded border border-gray-200/80 p-4 mb-2">
+              <PredictionPipeline
+                info={modelInfo}
+                mape={modelMetrics?.["1m"]?.mape}
+              />
+            </div>
+            <div className="flex items-center gap-4 px-1 py-2 mb-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-teal-600" />
+                <span className="text-[11px] text-gray-500">
+                  Home prices:{" "}
+                  <span className="font-medium text-gray-700">Zillow ZHVI</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <span className="text-[11px] text-gray-500">
+                  Mortgage rates:{" "}
+                  <span className="font-medium text-gray-700">
+                    Freddie Mac / FRED
+                  </span>
+                </span>
+              </div>
+            </div>
+            <ModelInsights info={modelInfo} detailedInfo={detailedModelInfo} />
+          </section>
+        )}
 
-          <div>
-            <h2 className="text-sm font-serif text-gray-950 mb-3 pb-2 border-b border-gray-100">
-              Data
-            </h2>
-            <p className="text-base text-gray-600 leading-relaxed">
-              Zillow ZHVI CSV files only — no external APIs. Trained on{' '}
-              <span className="font-semibold text-gray-900">63,477 rows</span> across{' '}
-              <span className="font-semibold text-gray-900">255 zipcodes</span>.
-              This tool covers{' '}
-              <span className="font-semibold text-gray-900">113 curated core Dallas zipcodes</span>.
-            </p>
-          </div>
+        {/* Model Accuracy */}
+        {modelMetrics && Object.keys(modelMetrics).length > 0 && (
+          <section className="mt-10">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-px w-5 bg-teal-800" />
+              <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                Model Accuracy
+              </h2>
+            </div>
+            <ModelAccuracy metrics={modelMetrics} />
+          </section>
+        )}
 
-          <div>
-            <h2 className="text-sm font-serif text-gray-950 mb-3 pb-2 border-b border-gray-100">
-              Limitations
-            </h2>
-            <p className="text-base text-gray-600 leading-relaxed">
-              Predictions are{' '}
-              <span className="font-semibold text-gray-900">1 month ahead only</span>.
-              Past performance does not guarantee future results.
-              This is{' '}
-              <span className="font-semibold text-gray-900">not financial advice</span>.
-            </p>
-          </div>
-        </div>
+        {/* Under the Hood: XGBoost */}
+        {modelInfo && modelMetrics && Object.keys(modelMetrics).length > 0 && (
+          <section className="mt-10">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-px w-5 bg-teal-800" />
+              <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
+                Under the Hood: XGBoost
+              </h2>
+            </div>
+            <XGBoostDeepDive
+              metrics={modelMetrics}
+              info={modelInfo}
+              deepDive={deepDiveInfo}
+            />
+          </section>
+        )}
       </div>
     </main>
-  )
+  );
 }

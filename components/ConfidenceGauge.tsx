@@ -63,6 +63,22 @@ export default function ConfidenceGauge({ direction, confidence, explanation, mo
   const hasMomentum = momentumPeriods && momentumPeriods.length > 0
   const directionWord = isUp ? 'increase' : 'decrease'
 
+  // Detect a trend reversal: if the 12-month (or longest available) momentum
+  // points opposite to the forecast, tell the user explicitly — pairing red
+  // momentum numbers with "predict a price increase" without context reads
+  // as a contradiction.
+  const longTrend =
+    momentumPeriods?.find(p => p.label === '12 Months')?.pct ??
+    momentumPeriods?.[momentumPeriods.length - 1]?.pct ??
+    0
+  const reversalUp = isUp && longTrend < -1.0
+  const reversalDown = !isUp && longTrend > 1.0
+  const marketContextCopy = reversalUp
+    ? "Prices in this area have been trending down over the past year, but the model's short-term signals suggest a small rebound next month."
+    : reversalDown
+    ? 'Prices have risen over the past year, but the model expects a small pullback next month.'
+    : `Here's how prices in this area have moved recently. Our model factors in these trends along with seasonal patterns and market data to predict a price ${directionWord} next month.`
+
   return (
     <div className="bg-white rounded border border-gray-200/80 p-6 space-y-5">
       {/* Gauge + primary labels */}
@@ -132,8 +148,7 @@ export default function ConfidenceGauge({ direction, confidence, explanation, mo
             Recent Market Activity
           </span>
           <p className="text-xs text-gray-500 mt-1.5 mb-3">
-            Here&apos;s how prices in this area have moved recently. Our model factors in these trends
-            along with seasonal patterns and market data to predict a price {directionWord} next month.
+            {marketContextCopy}
           </p>
           <div className="grid grid-cols-3 gap-3">
             {momentumPeriods.map(p => {

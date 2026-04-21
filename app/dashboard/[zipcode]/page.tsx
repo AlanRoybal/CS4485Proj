@@ -1,5 +1,5 @@
-import { fetchPrediction, fetchHistory, fetchBedroomPrices, fetchModelMetrics, fetchModelInfo, fetchBacktest, fetchZipcodeProfile, fetchModelInfoDetailed, fetchModelDeepDive } from '@/lib/api'
-import type { BacktestResult, ZipcodeProfileResult, DetailedModelInfo, XGBoostDeepDiveInfo } from '@/lib/api'
+import { fetchPrediction, fetchHistory, fetchBedroomPrices, fetchModelMetrics, fetchBacktest, fetchZipcodeProfile } from '@/lib/api'
+import type { BacktestResult, ZipcodeProfileResult } from '@/lib/api'
 import { buildChartData } from '@/lib/mock-data'
 import DashboardHeader from '@/components/DashboardHeader'
 
@@ -9,13 +9,9 @@ import PriceChart from '@/components/PriceChart'
 import ConfidenceGauge from '@/components/ConfidenceGauge'
 import BedroomCards from '@/components/BedroomCards'
 import MarketMomentum from '@/components/MarketMomentum'
-import ModelAccuracy from '@/components/ModelAccuracy'
-import ModelInsights from '@/components/ModelInsights'
 import BacktestChart from '@/components/BacktestChart'
 import ZipcodeProfile from '@/components/ZipcodeProfile'
-import PredictionPipeline from '@/components/PredictionPipeline'
 import DashboardMap from '@/components/DashboardMap'
-import XGBoostDeepDive from '@/components/XGBoostDeepDive'
 import MortgageRateContext from '@/components/MortgageRateContext'
 import BathroomImpact from '@/components/BathroomImpact'
 import { notFound } from 'next/navigation'
@@ -36,23 +32,17 @@ export default async function DashboardPage({
   let history: Awaited<ReturnType<typeof fetchHistory>>
   let bedroomData: Awaited<ReturnType<typeof fetchBedroomPrices>>
   let modelMetrics: Awaited<ReturnType<typeof fetchModelMetrics>>
-  let modelInfo: Awaited<ReturnType<typeof fetchModelInfo>>
   let backtestData: BacktestResult | null
   let zipcodeProfileData: ZipcodeProfileResult | null
-  let detailedModelInfo: DetailedModelInfo | null
-  let deepDiveInfo: XGBoostDeepDiveInfo | null
 
   try {
-    ;[prediction, history, bedroomData, modelMetrics, modelInfo, backtestData, zipcodeProfileData, detailedModelInfo, deepDiveInfo] = await Promise.all([
+    ;[prediction, history, bedroomData, modelMetrics, backtestData, zipcodeProfileData] = await Promise.all([
       fetchPrediction(zipcode, bedrooms, bathrooms),
       fetchHistory(zipcode, bedrooms, bathrooms),
       fetchBedroomPrices(zipcode, bathrooms),
       fetchModelMetrics(),
-      fetchModelInfo(),
       fetchBacktest(zipcode, bedrooms, bathrooms),
       fetchZipcodeProfile(zipcode, bedrooms, bathrooms),
-      fetchModelInfoDetailed(),
-      fetchModelDeepDive(),
     ])
   } catch (err) {
     const message = err instanceof Error ? err.message : ''
@@ -61,11 +51,20 @@ export default async function DashboardPage({
   }
 
   const { prices: bedroomPrices, city } = bedroomData
-  const chartData = buildChartData(history, prediction)
 
+  // Align history to the prediction's snapshot so every "current price" on the
+  // page comes from the same source. /history can have points newer than
+  // latest_data.pkl; trimming keeps the chart, momentum, and YoY consistent
+  // with prediction.current_price.
   const sortedHistory = [...history].sort((a, b) => a.date.localeCompare(b.date))
-  const currentPrice = sortedHistory[sortedHistory.length - 1]?.zhvi ?? prediction.current_price
-  const twelveMonthsAgo = sortedHistory[sortedHistory.length - 13]?.zhvi ?? currentPrice
+  const alignedHistory = prediction.data_date
+    ? sortedHistory.filter(p => p.date <= prediction.data_date!)
+    : sortedHistory
+
+  const chartData = buildChartData(alignedHistory, prediction)
+
+  const currentPrice = prediction.current_price
+  const twelveMonthsAgo = alignedHistory[alignedHistory.length - 13]?.zhvi ?? currentPrice
   const yoyChange = twelveMonthsAgo > 0
     ? ((currentPrice - twelveMonthsAgo) / twelveMonthsAgo) * 100
     : 0
@@ -76,7 +75,7 @@ export default async function DashboardPage({
     { label: '6 Months', months: 6 },
     { label: '12 Months', months: 12 },
   ].map(({ label, months }) => {
-    const pastPrice = sortedHistory[sortedHistory.length - 1 - months]?.zhvi
+    const pastPrice = alignedHistory[alignedHistory.length - 1 - months]?.zhvi
     const pct = pastPrice && pastPrice > 0
       ? ((currentPrice - pastPrice) / pastPrice) * 100
       : 0
@@ -200,67 +199,6 @@ export default async function DashboardPage({
               </section>
             )}
 
-            {/* Model Accuracy */}
-            {modelMetrics && Object.keys(modelMetrics).length > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px w-5 bg-teal-800" />
-                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
-                    Model Accuracy
-                  </h2>
-                </div>
-                <ModelAccuracy metrics={modelMetrics} />
-              </section>
-            )}
-
-            {/* How We Predict */}
-            {modelInfo && (
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px w-5 bg-teal-800" />
-                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
-                    How We Predict
-                  </h2>
-                </div>
-                {/* Pipeline visual */}
-                <div className="bg-white rounded border border-gray-200/80 p-4 mb-2">
-                  <PredictionPipeline
-                    info={modelInfo}
-                    predictedPrice={prediction.predicted_price}
-                    mape={modelMetrics?.['1m']?.mape}
-                  />
-                </div>
-                {/* Data source attribution */}
-                <div className="flex items-center gap-4 px-1 py-2 mb-4">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-teal-600" />
-                    <span className="text-[11px] text-gray-500">Home prices: <span className="font-medium text-gray-700">Zillow ZHVI</span></span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    <span className="text-[11px] text-gray-500">Mortgage rates: <span className="font-medium text-gray-700">Freddie Mac / FRED</span></span>
-                  </div>
-                </div>
-                <ModelInsights info={modelInfo} detailedInfo={detailedModelInfo} />
-              </section>
-            )}
-
-            {/* Under the Hood: XGBoost */}
-            {modelInfo && modelMetrics && Object.keys(modelMetrics).length > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px w-5 bg-teal-800" />
-                  <h2 className="text-[11px] font-semibold tracking-[0.2em] uppercase text-teal-800">
-                    Under the Hood: XGBoost
-                  </h2>
-                </div>
-                <XGBoostDeepDive
-                  metrics={modelMetrics}
-                  info={modelInfo}
-                  deepDive={deepDiveInfo}
-                />
-              </section>
-            )}
           </div>
         </div>
 
