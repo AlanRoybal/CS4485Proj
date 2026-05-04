@@ -16,8 +16,20 @@ import os
 import io
 import datetime
 import warnings
-import numpy as np
-import pandas as pd
+
+# numpy / pandas are only required inside the Modal container (image installs
+# them via pip_install). Wrapping the imports lets `modal run backend/refresh_data.py`
+# succeed even when the local Python doesn't have these packages, since Modal
+# only needs to import this module locally to discover the @local_entrypoint.
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None  # type: ignore[assignment]
 
 try:
     import requests

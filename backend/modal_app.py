@@ -10,7 +10,13 @@ backend_dir = pathlib.Path(__file__).parent
 image = (
     modal.Image.debian_slim()
     .pip_install(
-        'fastapi', 'pandas', 'pyarrow', 'scikit-learn', 'xgboost==1.7.6',
+        # NOTE: keep xgboost in sync with backend/train_xgboost.py and
+        # backend/retrain_on_modal.py. The .pkl files on Volume were saved by
+        # whichever xgboost the training image installed (currently unpinned),
+        # and xgboost cannot reliably load a model pickled by a different
+        # major version (e.g. 1.7.x serving + 2.x trained -> AttributeError on
+        # `gpu_id` because 2.x removed it).
+        'fastapi', 'pandas', 'pyarrow', 'scikit-learn', 'xgboost',
         'joblib', 'numpy',
     )
     .add_local_dir(backend_dir, remote_path="/root/backend")

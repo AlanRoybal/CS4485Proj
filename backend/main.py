@@ -226,6 +226,14 @@ def _get_data_date() -> pd.Timestamp:
     return pd.to_datetime(latest["Date"]).max()
 
 
+def _current_forecast_base() -> datetime:
+    """Return the 1st of the current calendar month (UTC).
+    Forecast horizons are computed relative to *now*, not the data's last date,
+    so the 1m forecast always points at next calendar month."""
+    today = datetime.utcnow()
+    return datetime(today.year, today.month, 1)
+
+
 def _confidence_label(confidence: float) -> str:
     """Map a 0.5–1.0 confidence score to a human-readable level."""
     if confidence >= 0.80:
@@ -271,8 +279,10 @@ def _direction_explanation(
     )
 
 
-def _forecast_date(base: pd.Timestamp, months: int) -> str:
-    """Add N months to a date and return YYYY-MM-DD string."""
+def _forecast_date(base: "pd.Timestamp | datetime", months: int) -> str:
+    """Add N months to a date and return YYYY-MM-DD string.
+    Accepts either a pandas Timestamp or a stdlib datetime — only `.year`
+    and `.month` are read, so both are interchangeable here."""
     year = base.year + (base.month + months - 1) // 12
     month = (base.month + months - 1) % 12 + 1
     return f"{year}-{month:02d}-01"
@@ -326,6 +336,7 @@ def predict(req: PredictRequest):
     )
 
     data_date = _get_data_date()
+    forecast_base = _current_forecast_base()
 
     mortgage_rate = row.get("mortgage_rate_30y")
     mortgage_rate = round(float(mortgage_rate), 2) if mortgage_rate is not None and not pd.isna(mortgage_rate) else None
@@ -340,9 +351,9 @@ def predict(req: PredictRequest):
         direction_1m=direction_1m,
         direction_explanation=explanation,
         data_date=data_date.strftime("%Y-%m-%d"),
-        forecast_date_1m=_forecast_date(data_date, 1),
-        forecast_date_3m=_forecast_date(data_date, 3),
-        forecast_date_6m=_forecast_date(data_date, 6),
+        forecast_date_1m=_forecast_date(forecast_base, 1),
+        forecast_date_3m=_forecast_date(forecast_base, 3),
+        forecast_date_6m=_forecast_date(forecast_base, 6),
         current_mortgage_rate=mortgage_rate,
     )
 
@@ -393,11 +404,12 @@ def zipcodes():
 def data_info():
     """Return metadata about the current dataset."""
     data_date = _get_data_date()
+    forecast_base = _current_forecast_base()
     return {
         "data_date": data_date.strftime("%Y-%m-%d"),
-        "forecast_date_1m": _forecast_date(data_date, 1),
-        "forecast_date_3m": _forecast_date(data_date, 3),
-        "forecast_date_6m": _forecast_date(data_date, 6),
+        "forecast_date_1m": _forecast_date(forecast_base, 1),
+        "forecast_date_3m": _forecast_date(forecast_base, 3),
+        "forecast_date_6m": _forecast_date(forecast_base, 6),
         "zipcodes": len(_state["latest"]),
     }
 

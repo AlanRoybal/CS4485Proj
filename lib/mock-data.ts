@@ -57,8 +57,10 @@ export const MOCK_BEDROOM_PRICES: BedroomPrices = {
 
 export const MOCK_CITY = 'Farmers Branch'
 
-// Build chart data: trim to last 3 years of history + forecast point.
-// Shorter history gives the forecast more visual breathing room on the chart.
+// Build chart data: trim to last ~1 year of history + fill gap months + forecast.
+// If actual data exists for months between the last data point and the forecast,
+// those months appear as solid historical line. Otherwise, linearly interpolated
+// estimates fill the gap as a dashed forecast line.
 export function buildChartData(
   history: HistoryPoint[],
   prediction: PredictionResult,
@@ -76,34 +78,63 @@ export function buildChartData(
     zhvi: h.zhvi,
   }))
 
-  // Bridge: last historical point also gets a forecast value to connect the dashed line
-  if (historical.length > 0) {
-    historical[historical.length - 1].forecast = prediction.current_price
-  }
-
-  // Only show the 1-month forecast point on the chart
+  // Determine the target forecast point
   const forecasts = prediction.forecasts ?? []
   const forecast1m = forecasts.find(f => f.horizon === '1m')
+
+  let forecastDate: string
+  let forecastPrice: number
+
   if (forecast1m) {
-    historical.push({
-      date: forecast1m.forecast_date,
-      forecast: forecast1m.predicted_price,
-    })
+    forecastDate = forecast1m.forecast_date
+    forecastPrice = forecast1m.predicted_price
   } else {
-    // Fallback: single forecast point
-    let forecastDate = prediction.forecast_date
-    if (!forecastDate && source.length > 0) {
-      const lastDate = source[source.length - 1].date
-      const nextMonth = new Date(lastDate)
-      nextMonth.setMonth(nextMonth.getMonth() + 1)
-      forecastDate = nextMonth.toISOString().slice(0, 10)
-    }
-    forecastDate = forecastDate ?? new Date().toISOString().slice(0, 10)
-    historical.push({
-      date: forecastDate,
-      forecast: prediction.predicted_price,
-    })
+    forecastDate = prediction.forecast_date ?? new Date().toISOString().slice(0, 10)
+    forecastPrice = prediction.predicted_price
   }
+
+  // Fill gap months between the last historical point and the forecast
+  // with interpolated zhvi values so they render as part of the solid line.
+  // Uses pure year/month arithmetic to avoid JS Date setMonth rollover bugs
+  // (e.g. March 31 + 1 month = May 1 because April 31 doesn't exist).
+  if (historical.length > 0) {
+    const lastHist = historical[historical.length - 1]
+    const lastHistDate = new Date(lastHist.date + 'T12:00:00')
+    const forecastDateObj = new Date(forecastDate + 'T12:00:00')
+    const lastHistPrice = lastHist.zhvi ?? prediction.current_price
+
+    const baseMonth = lastHistDate.getMonth()   // 0-indexed
+    const baseYear = lastHistDate.getFullYear()
+    const monthsDiff =
+      (forecastDateObj.getFullYear() - baseYear) * 12 +
+      (forecastDateObj.getMonth() - baseMonth)
+
+    if (monthsDiff > 1) {
+      for (let i = 1; i < monthsDiff; i++) {
+        const m = (baseMonth + i) % 12
+        const y = baseYear + Math.floor((baseMonth + i) / 12)
+        const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-01`
+
+        const t = i / monthsDiff
+        const interpPrice = Math.round((lastHistPrice + t * (forecastPrice - lastHistPrice)) * 100) / 100
+
+        historical.push({ date: dateStr, zhvi: interpPrice })
+      }
+    }
+  }
+
+  // Bridge: the last solid-line point also gets a forecast value so the
+  // dashed forecast line connects seamlessly from it.
+  if (historical.length > 0) {
+    historical[historical.length - 1].forecast =
+      historical[historical.length - 1].zhvi ?? prediction.current_price
+  }
+
+  // Final forecast point (the 1-month prediction endpoint with label)
+  historical.push({
+    date: forecastDate,
+    forecast: forecastPrice,
+  })
 
   return historical
 }
