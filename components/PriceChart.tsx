@@ -40,6 +40,12 @@ const fmtCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value)
 
+const fmtCompact = (value: number) => {
+  const abs = Math.abs(value)
+  if (abs >= 1000) return `$${(value / 1000).toFixed(1)}k`
+  return `$${value.toFixed(0)}`
+}
+
 /* ── Custom tooltip ── */
 
 function ChartTooltip({ active, payload, label }: {
@@ -89,32 +95,53 @@ function ActiveDot(props: { cx?: number; cy?: number }) {
   )
 }
 
-/* ── Forecast dot with price label ── */
+/* ── Forecast endpoint — shows price + delta from current ── */
 
-function ForecastDot(props: { cx?: number; cy?: number; payload?: ChartDataPoint; index?: number; width?: number; height?: number }) {
-  const { cx, cy, payload } = props
+function ForecastDot(props: {
+  cx?: number; cy?: number; payload?: ChartDataPoint
+  index?: number; width?: number; height?: number
+  bridgePrice?: number
+}) {
+  const { cx, cy, payload, bridgePrice } = props
   if (cx == null || cy == null || !payload?.forecast) return null
 
-  // Only render on actual forecast points (not the bridge point)
-  if (payload.zhvi != null) return null
+  // Bridge point: subtle dot only, no label — the solid line communicates it
+  if (payload.zhvi != null) {
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={4} fill="#475569" stroke="#fff" strokeWidth={2} />
+      </g>
+    )
+  }
 
-  const label = fmtCurrency(payload.forecast)
+  // Forecast endpoint: the hero annotation
+  const price = payload.forecast
+  const priceLabel = fmtCurrency(price)
   const month = new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' }).format(
     new Date(payload.date + 'T12:00:00'),
   )
 
-  // Position label above the dot
-  const pillW = 82
-  const pillH = 20
-  const pillX = cx - pillW / 2
-  const pillY = cy - pillH - 18
-  const textX = cx
-  const textY = pillY + pillH / 2 + 4
+  // Compute delta from bridge (current) price
+  const delta = bridgePrice != null ? price - bridgePrice : 0
+  const deltaPct = bridgePrice != null && bridgePrice > 0
+    ? (delta / bridgePrice) * 100
+    : 0
+  const isUp = delta >= 0
+  const arrow = isUp ? '▲' : '▼'
+  const deltaLabel = `${arrow} ${fmtCompact(Math.abs(delta))} (${Math.abs(deltaPct).toFixed(1)}%)`
+  const deltaColor = isUp ? '#059669' : '#dc2626'  // emerald-600 / red-600
+
+  // Card dimensions — taller to fit price + delta
+  const cardW = 110
+  const cardH = 42
+  const cardX = cx - cardW / 2
+  const cardY = cy - cardH - 20
 
   return (
     <g>
       {/* Glow ring */}
-      <circle cx={cx} cy={cy} r={10} fill="#0f766e" fillOpacity={0.08} />
+      <circle cx={cx} cy={cy} r={12} fill="#0f766e" fillOpacity={0.06} />
+      <circle cx={cx} cy={cy} r={7} fill="#0f766e" fillOpacity={0.10} />
       {/* Main dot */}
       <circle
         cx={cx}
@@ -123,43 +150,61 @@ function ForecastDot(props: { cx?: number; cy?: number; payload?: ChartDataPoint
         fill="#0f766e"
         stroke="#fff"
         strokeWidth={2}
-        style={{ filter: 'drop-shadow(0 2px 4px rgba(15,118,110,0.35))' }}
+        style={{ filter: 'drop-shadow(0 2px 6px rgba(15,118,110,0.4))' }}
       />
-      {/* Price pill above */}
+
+      {/* Annotation card */}
       <rect
-        x={pillX}
-        y={pillY}
-        width={pillW}
-        height={pillH}
-        rx={4}
+        x={cardX}
+        y={cardY}
+        width={cardW}
+        height={cardH}
+        rx={6}
         fill="#fff"
         stroke="#0f766e"
         strokeWidth={1}
-        strokeOpacity={0.2}
+        strokeOpacity={0.15}
+        style={{ filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.08))' }}
       />
+
+      {/* Price — top line of card */}
       <text
-        x={textX}
-        y={textY}
+        x={cx}
+        y={cardY + 17}
         textAnchor="middle"
         fill="#0f766e"
-        fontSize={11}
+        fontSize={12}
         fontWeight={700}
         fontFamily="var(--font-dm-sans)"
       >
-        {label}
+        {priceLabel}
       </text>
-      {/* Month label below the dot */}
+
+      {/* Delta — bottom line of card */}
       <text
         x={cx}
-        y={cy + 18}
+        y={cardY + 33}
+        textAnchor="middle"
+        fill={deltaColor}
+        fontSize={10}
+        fontWeight={600}
+        fontFamily="var(--font-dm-sans)"
+      >
+        {deltaLabel}
+      </text>
+
+      {/* Month + "Forecast" tag below the dot */}
+      <text
+        x={cx}
+        y={cy + 17}
         textAnchor="middle"
         fill="#0f766e"
         fontSize={9}
         fontWeight={600}
         fontFamily="var(--font-dm-sans)"
-        opacity={0.6}
+        opacity={0.55}
       >
-        {month}
+        {month} Forecast
       </text>
     </g>
   )
@@ -171,14 +216,17 @@ export default function PriceChart({ data, height }: Props) {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 
-  // Find the last forecast point and the last historical date for the shaded zone
+  // Find key points
   const forecastPoints = data.filter(d => d.forecast != null && d.zhvi == null)
   const forecastPoint = forecastPoints[forecastPoints.length - 1]
   const lastHistorical = [...data].reverse().find(d => d.zhvi != null)
 
+  // Bridge price (last solid point) — passed to ForecastDot for delta calculation
+  const bridgePrice = lastHistorical?.zhvi
+
   return (
     <ResponsiveContainer width="100%" height={height ?? 360}>
-      <AreaChart data={data} margin={{ top: 12, right: 24, left: -8, bottom: 4 }}>
+      <AreaChart data={data} margin={{ top: 52, right: 56, left: -8, bottom: 4 }}>
         <defs>
           <linearGradient id="zhviFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#0f766e" stopOpacity={0.08} />
@@ -192,7 +240,7 @@ export default function PriceChart({ data, height }: Props) {
           vertical={false}
         />
 
-        {/* Shaded forecast zone between last data point and forecast */}
+        {/* Shaded forecast zone */}
         {lastHistorical && forecastPoint && (
           <ReferenceArea
             x1={lastHistorical.date}
@@ -263,13 +311,13 @@ export default function PriceChart({ data, height }: Props) {
           connectNulls={false}
         />
 
-        {/* Forecast dashed line with prominent endpoint */}
+        {/* Forecast dashed line with annotated endpoint */}
         <Line
           dataKey="forecast"
           stroke="#0f766e"
           strokeWidth={2}
           strokeDasharray="6 4"
-          dot={<ForecastDot />}
+          dot={<ForecastDot bridgePrice={bridgePrice} />}
           activeDot={<ActiveDot />}
           connectNulls={false}
         />

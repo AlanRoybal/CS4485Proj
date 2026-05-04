@@ -61,7 +61,10 @@ export default async function DashboardPage({
     ? sortedHistory.filter(p => p.date <= prediction.data_date!)
     : sortedHistory
 
-  const chartData = buildChartData(alignedHistory, prediction)
+  // Pass full history (not trimmed at data_date) so the chart shows any
+  // available months between the model's training cutoff and the forecast.
+  // alignedHistory is still used for YoY / momentum calculations below.
+  const chartData = buildChartData(sortedHistory, prediction)
 
   const currentPrice = prediction.current_price
   const twelveMonthsAgo = alignedHistory[alignedHistory.length - 13]?.zhvi ?? currentPrice
